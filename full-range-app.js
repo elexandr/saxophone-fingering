@@ -799,6 +799,10 @@ class FullRangeStaffManager {
         anchor.addEventListener('click', (e) => {
             e.stopPropagation();
             this.selectNote(element.id);
+            // По клику слышно высоту ноты. Именно по клику, а не при выделении:
+            // выделение ставится и программно - при загрузке мелодии, удалении,
+            // перестановке, - и звук там был бы лишним.
+            this.playNotePreview(element);
         });
         
         this.bindDurationPanel(anchor, element);
@@ -1528,6 +1532,7 @@ class FullRangeStaffManager {
             // Добавляем обработчик клика для выбора ноты
             card.addEventListener('click', () => {
                 this.selectNote(note.id);
+                this.playNotePreview(note);
             });
         });
         
