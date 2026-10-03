@@ -1017,6 +1017,17 @@ class FullRangeStaffManager {
         this.updateNotePositions();
         this.updateNoteCount();
         this.updateAllFingerings();
+        this.updateFileButtons();
+    }
+    
+    // На пустом стане сохранять нечего, поэтому кнопки сохранения гаснут
+    updateFileButtons() {
+        const hasNotes = this.notes.length > 0;
+        
+        ['btn-save', 'btn-midi-save'].forEach(id => {
+            const button = document.getElementById(id);
+            if (button) button.disabled = !hasNotes;
+        });
     }
     
     selectedIndex() {
@@ -2636,8 +2647,14 @@ class FullRangeStaffManager {
     // Восстановление мелодии из сохранённых данных. Понимает и новый формат (elements),
     // и старый (notes) - чтобы ранее сохранённые мелодии не потерялись.
     applyMelody(data) {
-        // Загрузка мелодии - одно действие целиком: откат вернёт прежнюю мелодию
-        this.pushHistory();
+        // Загрузка из файла заменяет мелодию целиком - это как открытие
+        // документа. История отката начинается заново: иначе первый же откат
+        // вернул бы прежнюю мелодию, а выглядит это как пропажа всех нот.
+        if (!this.restoring) {
+            this.history.length = 0;
+            this.redoHistory.length = 0;
+            this.updateHistoryButtons();
+        }
         
         const elements = (data && (data.elements || data.notes)) || [];
         
