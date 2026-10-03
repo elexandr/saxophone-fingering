@@ -2826,7 +2826,12 @@ class FullRangeStaffManager {
             }
             
             const data = JSON.parse(dataStr);
+            // Восстановление последней мелодии при запуске - не действие
+            // пользователя, поэтому в историю отката его не пишем: иначе
+            // первый же откат вернул бы пустой стан и все ноты пропали бы
+            this.restoring = true;
             this.applyMelody(data);
+            this.restoring = false;
             
             const savedAt = data.timestamp ? new Date(data.timestamp) : null;
             const when = savedAt && !isNaN(savedAt.getTime())

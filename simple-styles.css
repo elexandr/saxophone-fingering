@@ -403,6 +403,34 @@ body {
     flex-shrink: 0;
 }
 
+.staff-header-center {
+    /* Откат и возврат стоят посередине полосы над станом.
+       Раскладку задаём строкой: в боковой панели группы идут столбиком */
+    margin: 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Узкий экран: второстепенные сведения убираем, иначе полоса над станом
+   переносится на вторую строку и отнимает высоту у стана */
+@media (max-width: 1100px) {
+    .staff-info-optional {
+        display: none;
+    }
+}
+
+/* Боковые группы делим поровну: тогда откат и возврат стоят ровно
+   посередине полосы, а не посередине свободного места */
+.staff-header .staff-header-buttons,
+.staff-header .staff-info {
+    flex: 1 1 0;
+}
+
+.staff-header .staff-info {
+    justify-content: flex-end;
+}
+
 .staff-header-buttons {
     margin: 0;
     flex-direction: row;
