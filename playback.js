@@ -194,7 +194,11 @@
         osc2.stop(stopAt);
         lfo.stop(stopAt);
 
-        this.voices.push(osc1, osc2, lfo);
+        var voices = [osc1, osc2, lfo];
+        this.voices.push.apply(this.voices, voices);
+
+        // Возвращаем голоса: вызывающий может погасить звук раньше срока
+        return voices;
     };
 
     // elements: [{ noteName, duration, dotted, isRest }], handlers: { onElement, onEnd, onUnsupported }

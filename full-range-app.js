@@ -1135,7 +1135,7 @@ class FullRangeStaffManager {
         return true;
     }
     
-    // Короткое звучание одной ноты: при постановке и при смене высоты,
+    // Короткое звучание одной ноты: при постановке, клике и смене высоты,
     // чтобы сразу слышать, что получается. Во время проигрывания молчим,
     // а при массовой загрузке мелодии - тем более: там нот десятки.
     playNotePreview(element) {
@@ -1154,7 +1154,50 @@ class FullRangeStaffManager {
         // целая на медленном темпе тянулась бы слишком долго
         const seconds = Math.min(1.2, Math.max(0.35, Playback.secondsFor(element, this.tempo)));
         
-        this.melodyPlayer.scheduleNote(frequency, ctx.currentTime + 0.02, seconds);
+        // Предыдущее озвучивание гасим: при частом нажатии стрелок ноты
+        // иначе накладывались бы друг на друга
+        this.stopNotePreview();
+        this.previewVoices = this.melodyPlayer.scheduleNote(
+            frequency, ctx.currentTime + 0.02, seconds) || [];
+        
+        return true;
+    }
+    
+    // Погасить озвучивание отдельной ноты, не трогая проигрывание мелодии
+    stopNotePreview() {
+        const voices = this.previewVoices || [];
+        this.previewVoices = [];
+        
+        voices.forEach(voice => {
+            try { voice.stop(); } catch (e) { /* уже остановлен */ }
+            try { voice.disconnect(); } catch (e) { /* уже отключён */ }
+        });
+    }
+    
+    // Перемещение по нотам стрелками: выделяем соседнюю и озвучиваем её
+    moveSelection(direction) {
+        if (!this.notes.length) return false;
+        
+        const current = this.notes.findIndex(note => note.id === this.selectedNoteId);
+        let index;
+        
+        if (current === -1) {
+            // Ничего не выделено: идём с того края, в сторону которого шагаем
+            index = direction > 0 ? 0 : this.notes.length - 1;
+        } else {
+            index = current + direction;
+            if (index < 0 || index >= this.notes.length) return false;
+        }
+        
+        const note = this.notes[index];
+        this.selectNote(note.id);
+        this.playNotePreview(note);
+        
+        // Во время проигрывания прокруткой управляет оно само
+        if (!this.melodyPlayer || !this.melodyPlayer.playing) {
+            this.followPlayback(note);
+        }
+        
         return true;
     }
     
@@ -2756,6 +2799,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const fromText = fromIndex > 0 ? t('status.playingFrom') : '';
         
         function start(isRepeat) {
+            // Своё озвучивание отдельных нот гасим: иначе оно наложится
+            staffManager.stopNotePreview();
+            
             const started = staffManager.melodyPlayer.play(sequence, staffManager.tempo, {
                 onElement: (index, element) => {
                     staffManager.highlightElement(element);
@@ -2837,20 +2883,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     document.addEventListener('keydown', (event) => {
-        const isSpace = event.key === ' ' || event.code === 'Space';
-        if (!isSpace || event.repeat) return;
-        
-        // В полях ввода пробел остаётся пробелом
+        // В полях ввода клавиши остаются своими: в поле темпа стрелки
+        // меняют число, в ползунке размера - размер картинки
         if (isTypingTarget(event.target)) return;
         
-        // На кнопке или ссылке пробел нажимает её - не отбираем
-        if (event.target && event.target.closest && event.target.closest('button, a')) return;
+        const isSpace = event.key === ' ' || event.code === 'Space';
         
-        // При открытом окне «О проекте» пробел не должен включать музыку
+        if (isSpace) {
+            if (event.repeat) return;
+            
+            // На кнопке или ссылке пробел нажимает её - не отбираем
+            if (event.target && event.target.closest && event.target.closest('button, a')) return;
+            
+            // При открытом окне «О проекте» пробел не должен включать музыку
+            if (document.querySelector('#about-modal:not([hidden])')) return;
+            
+            event.preventDefault();
+            toggleMelody();
+            return;
+        }
+        
+        const isLeft = event.key === 'ArrowLeft';
+        const isRight = event.key === 'ArrowRight';
+        const isUp = event.key === 'ArrowUp';
+        const isDown = event.key === 'ArrowDown';
+        
+        if (!isLeft && !isRight && !isUp && !isDown) return;
+        
+        // При открытом окне стрелки не должны двигать ноты за ним
         if (document.querySelector('#about-modal:not([hidden])')) return;
         
-        event.preventDefault();
-        toggleMelody();
+        // Влево и вправо - переход по нотам
+        if (isLeft || isRight) {
+            event.preventDefault();
+            staffManager.moveSelection(isRight ? 1 : -1);
+            return;
+        }
+        
+        // Shift со стрелкой вверх или вниз - смена высоты ноты
+        if (event.shiftKey) {
+            event.preventDefault();
+            staffManager.changeSelectedNotePitch(isUp ? 1 : -1);
+        }
     });
     
     function stopMelody() {
