@@ -15,6 +15,20 @@ const GLYPH_HALF_WIDTH = 30;
 const FINGERING_ROW_HEIGHT = 230;
 // Ниже этого предела строку не уменьшаем: аппликатуру уже не разобрать
 const MIN_SYSTEM_SCALE = 0.6;
+// Длительности от самой длинной к самой короткой. По этой лесенке ходят
+// Alt+вверх и Alt+вниз, поэтому точка стоит отдельной ступенью.
+const DURATION_LADDER = [
+    { duration: 1, dotted: true },
+    { duration: 1, dotted: false },
+    { duration: 2, dotted: true },
+    { duration: 2, dotted: false },
+    { duration: 4, dotted: true },
+    { duration: 4, dotted: false },
+    { duration: 8, dotted: true },
+    { duration: 8, dotted: false },
+    { duration: 16, dotted: true },
+    { duration: 16, dotted: false }
+];
 // Отступ от верха области, когда показываем звучащую строку
 const PLAYBACK_SCROLL_MARGIN = 8;
 // Пауза между кругами при игре по кругу: за неё стан успевает подняться
@@ -1175,8 +1189,7 @@ class FullRangeStaffManager {
     }
     
     // Перемещение по нотам стрелками: выделяем соседнюю и озвучиваем её
-    moveSelection(direction) {
-        if (!this.notes.length) return false;
+    moveSelection(direction) {        if (!this.notes.length) return false;
         
         const current = this.notes.findIndex(note => note.id === this.selectedNoteId);
         let index;
@@ -1197,6 +1210,94 @@ class FullRangeStaffManager {
         if (!this.melodyPlayer || !this.melodyPlayer.playing) {
             this.followPlayback(note);
         }
+        
+        return true;
+    }
+    
+    // Выделенный элемент мелодии, если он есть
+    selectedElement() {
+        if (!this.selectedNoteId) return null;
+        return this.notes.find(note => note.id === this.selectedNoteId) || null;
+    }
+    
+    // Alt со стрелкой вверх или вниз меняет длительность выделенного элемента
+    changeSelectedDuration(direction) {
+        const element = this.selectedElement();
+        if (!element) return false;
+        
+        const index = DURATION_LADDER.findIndex(step =>
+            step.duration === element.duration && step.dotted === !!element.dotted);
+        if (index === -1) return false;
+        
+        // direction 1 - длиннее, а лесенка начинается с самой длинной
+        const next = index - direction;
+        if (next < 0 || next >= DURATION_LADDER.length) {
+            this.updateStatus(t('status.durationLimit'));
+            return false;
+        }
+        
+        const step = DURATION_LADDER[next];
+        this.setElementDuration(element, step.duration);
+        if (!!element.dotted !== step.dotted) this.setElementDotted(element, step.dotted);
+        
+        // setElementDuration пишет в строку состояния только про длительность,
+        // поэтому говорим ещё раз - уже с учётом точки
+        this.updateStatus(t(step.dotted ? 'status.durationSetDotted' : 'status.durationSet',
+            { name: this.durationLabel(step.duration) }));
+        
+        return true;
+    }
+    
+    // Insert вставляет ноту перед выделенной, той же высоты, что предыдущая.
+    // Выделение переходит на вставленную.
+    insertNoteBefore() {
+        const element = this.selectedElement();
+        const index = element ? this.notes.indexOf(element) : this.notes.length;
+        
+        // Высоту берём у предыдущей ноты, если её нет - у следующей,
+        // если и её нет - у C4
+        const previous = index > 0 ? this.notes[index - 1] : null;
+        const next = this.notes[index] || null;
+        const source = (previous && !previous.isRest) ? previous
+            : ((next && !next.isRest) ? next : null);
+        
+        const noteName = source ? (source.noteName || source.displayName) : 'C4';
+        const noteInfo = this.getNoteInfoByName(noteName);
+        if (!noteInfo || !noteInfo.positionId) return false;
+        
+        const noteId = this.addNote(noteInfo.positionId, noteName, index, { silent: true });
+        if (!noteId) return false;
+        
+        const note = this.notes.find(n => n.id === noteId);
+        if (!note) return false;
+        
+        // Длительность берём у соседа: вставляем в мелодию, а не в пустоту
+        if (source) {
+            note.duration = source.duration || 4;
+            note.dotted = !!source.dotted;
+        }
+        
+        this.relayout();
+        this.selectNote(noteId);
+        this.playNotePreview(note);
+        this.updateStatus(t('status.noteInserted', { name: note.displayName }));
+        this.scheduleAutosave();
+        
+        return true;
+    }
+    
+    // Shift+Insert вставляет паузу перед выделенным элементом
+    insertRestBefore() {
+        const element = this.selectedElement();
+        const index = element ? this.notes.indexOf(element) : this.notes.length;
+        
+        const restId = this.addRest(index, { silent: true });
+        if (!restId) return false;
+        
+        this.relayout();
+        this.selectNote(restId);
+        this.updateStatus(t('status.restInserted'));
+        this.scheduleAutosave();
         
         return true;
     }
@@ -2908,22 +3009,50 @@ document.addEventListener('DOMContentLoaded', () => {
         const isUp = event.key === 'ArrowUp';
         const isDown = event.key === 'ArrowDown';
         
-        if (!isLeft && !isRight && !isUp && !isDown) return;
+        // Стрелки, а также Delete и Insert обрабатываются ниже
+        const isDelete = event.key === 'Delete';
+        const isInsert = event.key === 'Insert';
+        if (!isLeft && !isRight && !isUp && !isDown && !isDelete && !isInsert) return;
         
         // При открытом окне стрелки не должны двигать ноты за ним
         if (document.querySelector('#about-modal:not([hidden])')) return;
         
-        // Влево и вправо - переход по нотам
+        // Влево и вправо - переход по ногам
         if (isLeft || isRight) {
             event.preventDefault();
             staffManager.moveSelection(isRight ? 1 : -1);
             return;
         }
         
+        // Alt со стрелкой - длительность выделенного
+        if (event.altKey && (isUp || isDown)) {
+            event.preventDefault();
+            staffManager.changeSelectedDuration(isUp ? 1 : -1);
+            return;
+        }
+        
         // Shift со стрелкой вверх или вниз - смена высоты ноты
-        if (event.shiftKey) {
+        if (event.shiftKey && (isUp || isDown)) {
             event.preventDefault();
             staffManager.changeSelectedNotePitch(isUp ? 1 : -1);
+            return;
+        }
+        
+        // Delete - удалить выделенную ноту или паузу
+        if (event.key === 'Delete') {
+            event.preventDefault();
+            staffManager.deleteSelectedNote();
+            return;
+        }
+        
+        // Insert - вставить ноту, Shift+Insert - паузу
+        if (event.key === 'Insert') {
+            event.preventDefault();
+            if (event.shiftKey) {
+                staffManager.insertRestBefore();
+            } else {
+                staffManager.insertNoteBefore();
+            }
         }
     });
     
