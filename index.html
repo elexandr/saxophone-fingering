@@ -9,7 +9,7 @@
     <meta name="referrer" content="no-referrer">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <title data-i18n="app.docTitle">Saxophone Fingering Assistant</title>
-    <link rel="stylesheet" href="simple-styles.css?v=1.8.9">
+    <link rel="stylesheet" href="simple-styles.css?v=1.8.10">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -75,6 +75,8 @@
                         <i class="fas fa-pause-circle"></i> <span data-i18n="panel.rests">Паузы</span>
                     </h3>
                     <div class="control-group">
+                        <button id="btn-undo" class="btn-control" disabled data-i18n-title="btn.undo.hint"><i class="fas fa-undo"></i> <span data-i18n="btn.undo">Отменить</span></button>
+                        <button id="btn-redo" class="btn-control" disabled data-i18n-title="btn.redo.hint"><i class="fas fa-redo"></i> <span data-i18n="btn.redo">Вернуть</span></button>
                         <button id="btn-add-rest" class="btn-control" data-i18n-title="btn.addRest.hint">
                             <i class="fas fa-plus"></i> <span data-i18n="btn.addRest">Добавить паузу</span>
                         </button>
@@ -253,7 +255,7 @@
             <div class="status-bar">
                 <span id="status-message" data-i18n="status.ready">Готов к работе. Кликните на маркер позиции, чтобы добавить ноту.</span>
                 <span id="cache-status" class="cache-status"></span>
-                <span class="app-version">v1.8.9</span>
+                <span class="app-version">v1.8.10</span>
             </div>
         </footer>
     </div>
@@ -293,11 +295,11 @@
     </div>
 
     <!-- Скрипты -->
-    <script src="i18n.js?v=1.8.9"></script>
-    <script src="note-symbols.js?v=1.8.9"></script>
-    <script src="playback.js?v=1.8.9"></script>
-    <script src="image-cache.js?v=1.8.9"></script>
-    <script src="midi.js?v=1.8.9"></script>
-    <script src="full-range-app.js?v=1.8.9"></script>
+    <script src="i18n.js?v=1.8.10"></script>
+    <script src="note-symbols.js?v=1.8.10"></script>
+    <script src="playback.js?v=1.8.10"></script>
+    <script src="image-cache.js?v=1.8.10"></script>
+    <script src="midi.js?v=1.8.10"></script>
+    <script src="full-range-app.js?v=1.8.10"></script>
 </body>
 </html>

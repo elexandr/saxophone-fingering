@@ -15,6 +15,7 @@ const GLYPH_HALF_WIDTH = 30;
 const FINGERING_ROW_HEIGHT = 230;
 // Ниже этого предела строку не уменьшаем: аппликатуру уже не разобрать
 const MIN_SYSTEM_SCALE = 0.6;
+const HISTORY_LIMIT = 50;
 // Длительности от самой длинной к самой короткой. По этой лесенке ходят
 // Alt+вверх и Alt+вниз, поэтому точка стоит отдельной ступенью.
 const DURATION_LADDER = [
@@ -51,6 +52,10 @@ class FullRangeStaffManager {
         this.container = document.getElementById(containerId);
         this.notes = [];
         this.selectedNoteId = null;
+        // История для отката: снимки мелодии в том же виде, что и при сохранении
+        this.history = [];
+        this.redoHistory = [];
+        this.restoring = false;
         this.selectedBarLineId = null;
         this.showNoteNames = true;
         this.showFingerings = true; // Показывать ряды аппликатур под станом
@@ -696,6 +701,9 @@ class FullRangeStaffManager {
     
     // Добавление ноты. insertIndex не задан - нота встаёт в конец мелодии.
     addNote(positionId, noteName = null, insertIndex = null, options = {}) {
+        // Откат запоминаем до изменения, и только для ручных действий:
+        // при загрузке мелодии ноты добавляются пачкой и история не нужна
+        if (!options.silent) this.pushHistory();
         // Если передан noteName, используем его для получения правильной информации о ноте
         let noteInfo;
         let position;
@@ -758,6 +766,8 @@ class FullRangeStaffManager {
     
     // Добавление паузы. insertIndex не задан - пауза встаёт в конец мелодии.
     addRest(insertIndex = null, options = {}) {
+        // Как и у ноты: история только для ручной вставки паузы
+        if (!options.silent) this.pushHistory();
         const restId = 'rest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
         const rest = {
@@ -930,8 +940,10 @@ class FullRangeStaffManager {
         document.querySelectorAll('.note-anchor.menu-open').forEach(anchor => anchor.classList.remove('menu-open'));
     }
     
-    setElementDuration(element, duration) {
+    setElementDuration(element, duration, options = {}) {
         if (!duration || element.duration === duration) return;
+        
+        if (options.history !== false) this.pushHistory();
         
         element.duration = duration;
         this.refreshElement(element);
@@ -942,7 +954,10 @@ class FullRangeStaffManager {
         this.scheduleAutosave();
     }
     
-    setElementDotted(element, dotted) {
+    setElementDotted(element, dotted, options = {}) {
+        if (!!element.dotted === !!dotted) return;
+        
+        if (options.history !== false) this.pushHistory();
         element.dotted = !!dotted;
         this.refreshElement(element);
         // Точка меняет длительность, а значит и границы тактов
@@ -1113,6 +1128,7 @@ class FullRangeStaffManager {
         }
         
         // Обновляем ноту
+        this.pushHistory();
         note.positionId = newNoteInfo.positionId;
         note.noteName = newNoteName;
         note.displayName = newNoteInfo.displayName;
@@ -1220,6 +1236,63 @@ class FullRangeStaffManager {
         return this.notes.find(note => note.id === this.selectedNoteId) || null;
     }
     
+    // Снимок мелодии для отката. Формат тот же, что и в файле сохранения,
+    // поэтому восстановление идёт обычной загрузкой мелодии.
+    historySnapshot() {
+        const data = this.serializeMelody();
+        return { elements: data.elements, settings: data.settings };
+    }
+    
+    // Запомнить состояние перед изменением. Держим не больше HISTORY_LIMIT
+    // шагов: больше обычного не откатывают, а память не бесконечная.
+    pushHistory() {
+        if (this.restoring || this.loading) return;
+        
+        this.history.push(this.historySnapshot());
+        if (this.history.length > HISTORY_LIMIT) this.history.shift();
+        
+        // Новое действие обрывает ветку возврата
+        this.redoHistory.length = 0;
+        this.updateHistoryButtons();
+    }
+    
+    undo() {
+        return this.stepHistory(this.history, this.redoHistory, 'status.undone', 'status.nothingToUndo');
+    }
+    
+    redo() {
+        return this.stepHistory(this.redoHistory, this.history, 'status.redone', 'status.nothingToRedo');
+    }
+    
+    // Общий шаг отката и возврата: состояние уходит в обратную стопку
+    stepHistory(from, to, doneKey, emptyKey) {
+        if (!from.length) {
+            this.updateStatus(t(emptyKey));
+            return false;
+        }
+        
+        to.push(this.historySnapshot());
+        if (to.length > HISTORY_LIMIT) to.shift();
+        
+        this.restoring = true;
+        this.applyMelody(from.pop());
+        this.restoring = false;
+        
+        this.updateHistoryButtons();
+        this.updateStatus(t(doneKey));
+        this.scheduleAutosave();
+        
+        return true;
+    }
+    
+    updateHistoryButtons() {
+        const undoButton = document.getElementById('btn-undo');
+        const redoButton = document.getElementById('btn-redo');
+        
+        if (undoButton) undoButton.disabled = this.history.length === 0;
+        if (redoButton) redoButton.disabled = this.redoHistory.length === 0;
+    }
+    
     // Alt со стрелкой вверх или вниз меняет длительность выделенного элемента
     changeSelectedDuration(direction) {
         const element = this.selectedElement();
@@ -1237,8 +1310,12 @@ class FullRangeStaffManager {
         }
         
         const step = DURATION_LADDER[next];
-        this.setElementDuration(element, step.duration);
-        if (!!element.dotted !== step.dotted) this.setElementDotted(element, step.dotted);
+        // Запоминаем один раз на всё действие, а не отдельно на длительность и точку
+        this.pushHistory();
+        this.setElementDuration(element, step.duration, { history: false });
+        if (!!element.dotted !== step.dotted) {
+            this.setElementDotted(element, step.dotted, { history: false });
+        }
         
         // setElementDuration пишет в строку состояния только про длительность,
         // поэтому говорим ещё раз - уже с учётом точки
@@ -1254,6 +1331,7 @@ class FullRangeStaffManager {
         const element = this.selectedElement();
         const index = element ? this.notes.indexOf(element) : this.notes.length;
         
+        this.pushHistory();
         // Высоту берём у предыдущей ноты, если её нет - у следующей,
         // если и её нет - у C4
         const previous = index > 0 ? this.notes[index - 1] : null;
@@ -1291,6 +1369,7 @@ class FullRangeStaffManager {
         const element = this.selectedElement();
         const index = element ? this.notes.indexOf(element) : this.notes.length;
         
+        this.pushHistory();
         const restId = this.addRest(index, { silent: true });
         if (!restId) return false;
         
@@ -1310,6 +1389,7 @@ class FullRangeStaffManager {
         
         const note = this.notes[noteIndex];
         
+        this.pushHistory();
         note.element.remove();
         this.notes.splice(noteIndex, 1);
         
@@ -1339,6 +1419,8 @@ class FullRangeStaffManager {
             this.updateStatus(t('status.noNotesToTranspose'));
             return false;
         }
+        
+        this.pushHistory();
         
         let changedCount = 0;
         const selectedNoteId = this.selectedNoteId;
@@ -2526,6 +2608,9 @@ class FullRangeStaffManager {
     // Восстановление мелодии из сохранённых данных. Понимает и новый формат (elements),
     // и старый (notes) - чтобы ранее сохранённые мелодии не потерялись.
     applyMelody(data) {
+        // Загрузка мелодии - одно действие целиком: откат вернёт прежнюю мелодию
+        this.pushHistory();
+        
         const elements = (data && (data.elements || data.notes)) || [];
         
         this.loading = true;
@@ -2797,8 +2882,17 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.deleteSelectedNote();
     });
     
+    document.getElementById('btn-undo').addEventListener('click', () => {
+        staffManager.undo();
+    });
+    
+    document.getElementById('btn-redo').addEventListener('click', () => {
+        staffManager.redo();
+    });
+    
     document.getElementById('btn-clear').addEventListener('click', () => {
         if (confirm(t('status.confirmClear'))) {
+            staffManager.pushHistory();
             staffManager.clearAllNotes();
         }
     });
@@ -2987,6 +3081,27 @@ document.addEventListener('DOMContentLoaded', () => {
         // В полях ввода клавиши остаются своими: в поле темпа стрелки
         // меняют число, в ползунке размера - размер картинки
         if (isTypingTarget(event.target)) return;
+        
+        // Ctrl+Z - откат, Ctrl+Y или Ctrl+Shift+Z - возврат
+        if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+            const pressed = (event.key || '').toLowerCase();
+            
+            if (pressed === 'z') {
+                event.preventDefault();
+                if (event.shiftKey) {
+                    staffManager.redo();
+                } else {
+                    staffManager.undo();
+                }
+                return;
+            }
+            
+            if (pressed === 'y') {
+                event.preventDefault();
+                staffManager.redo();
+                return;
+            }
+        }
         
         const isSpace = event.key === ' ' || event.code === 'Space';
         
