@@ -3196,8 +3196,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function isTypingTarget(node) {
         if (!node || !node.tagName) return false;
         const tag = node.tagName.toLowerCase();
-        return tag === 'input' || tag === 'textarea' || tag === 'select' ||
-            node.isContentEditable === true;
+        if (tag === 'textarea' || tag === 'select') return true;
+        if (node.isContentEditable === true) return true;
+        
+        // Из полей ввода текстом считаются только текстовые: у ползунка
+        // размера и у флажков своих сочетаний нет, и Ctrl+Z в них должен
+        // работать как откат действия, а не пропадать
+        if (tag !== 'input') return false;
+        
+        const type = (node.type || 'text').toLowerCase();
+        return ['text', 'number', 'search', 'email', 'password', 'tel', 'url'].indexOf(type) >= 0;
     }
     
     function toggleMelody() {
@@ -3213,11 +3221,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // меняют число, в ползунке размера - размер картинки
         if (isTypingTarget(event.target)) return;
         
-        // Ctrl+Z - откат, Ctrl+Y или Ctrl+Shift+Z - возврат
+        // Ctrl+Z - откат, Ctrl+Y или Ctrl+Shift+Z - возврат.
+        // Клавишу определяем по физической позиции (code), а не по символу:
+        // на русской раскладке та же клавиша даёт "я", и сочетание не срабатывало
         if ((event.ctrlKey || event.metaKey) && !event.altKey) {
-            const pressed = (event.key || '').toLowerCase();
+            const key = (event.key || '').toLowerCase();
+            const isZ = event.code === 'KeyZ' || key === 'z' || key === 'я';
+            const isY = event.code === 'KeyY' || key === 'y' || key === 'н';
             
-            if (pressed === 'z') {
+            if (isZ) {
                 event.preventDefault();
                 if (event.shiftKey) {
                     staffManager.redo();
@@ -3227,7 +3239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            if (pressed === 'y') {
+            if (isY) {
                 event.preventDefault();
                 staffManager.redo();
                 return;
