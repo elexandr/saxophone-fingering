@@ -91,7 +91,9 @@
 
     // Невидимая зона захвата клика: сам SVG пропускает события сквозь пустое поле.
     function hitMarkup() {
-        return '<circle class="glyph-hit" cx="0" cy="6" r="16" fill="none" pointer-events="all"/>';
+        // Зона попадания чуть больше головки: по ней проще навести мышь,
+        // а размер совпадает с ободком выделения
+        return '<circle class="glyph-hit" cx="0" cy="6" r="19" fill="none" pointer-events="all"/>';
     }
 
     function haloMarkup() {

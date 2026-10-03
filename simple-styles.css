@@ -685,14 +685,19 @@ body {
     white-space: nowrap;
     z-index: 20;
     opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s;
+    /* Прячем не мгновенно, а с паузой: окошко стоит выше ноты, и без неё
+       до него не успеть - особенно когда штиль направлен вверх. Видимость
+       переключается с задержкой, поэтому во время паузы окошко ещё можно
+       навести мышью и удержать. */
+    visibility: hidden;
+    transition: opacity 0.12s ease, visibility 0s linear 0.4s;
 }
 
 .note-anchor:hover .duration-panel,
 .note-anchor.menu-open .duration-panel {
     opacity: 1;
-    pointer-events: auto;
+    visibility: visible;
+    transition: opacity 0.12s ease, visibility 0s linear 0s;
 }
 
 .note-anchor[data-stem="up"] .duration-panel {
