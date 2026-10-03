@@ -736,6 +736,7 @@ class FullRangeStaffManager {
             this.updateStatus(t('status.addedNote', { name: noteInfo.displayName, position: noteInfo.positionId }));
             this.scheduleAutosave();
             this.scrollToRight();
+            this.playNotePreview(note);
         }
         
         return noteId;
@@ -1126,6 +1127,30 @@ class FullRangeStaffManager {
         
         this.updateStatus(t('status.noteChanged', { name: newNoteInfo.displayName }));
         this.scheduleAutosave();
+        this.playNotePreview(note);
+        return true;
+    }
+    
+    // Короткое звучание одной ноты: при постановке и при смене высоты,
+    // чтобы сразу слышать, что получается. Во время проигрывания молчим,
+    // а при массовой загрузке мелодии - тем более: там нот десятки.
+    playNotePreview(element) {
+        if (!element || element.isRest || this.loading) return false;
+        if (!this.melodyPlayer || this.melodyPlayer.playing) return false;
+        if (!Playback.audioSupported()) return false;
+        
+        const frequency = Playback.noteToFrequency(element.noteName || element.displayName);
+        if (!frequency) return false;
+        
+        const ctx = this.melodyPlayer.ensureContext();
+        if (!ctx) return false;
+        if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+        
+        // Длительность берём у самой ноты, но в разумных пределах:
+        // целая на медленном темпе тянулась бы слишком долго
+        const seconds = Math.min(1.2, Math.max(0.35, Playback.secondsFor(element, this.tempo)));
+        
+        this.melodyPlayer.scheduleNote(frequency, ctx.currentTime + 0.02, seconds);
         return true;
     }
     
