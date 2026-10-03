@@ -561,8 +561,128 @@
         return { total: segments.length, inside: inside };
     }
 
+    // --- запись файла ------------------------------------------------------
+    
+    // Разрешение дорожки: 480 тиков на четверть, привычное редакторам
+    var TICKS_PER_QUARTER = 480;
+    
+    // Число переменной длины: по семь бит на байт, старший бит - продолжение
+    function writeVlq(value) {
+        var bytes = [value & 0x7f];
+        var rest = Math.floor(value / 128);
+        
+        while (rest > 0) {
+            bytes.unshift((rest & 0x7f) | 0x80);
+            rest = Math.floor(rest / 128);
+        }
+        
+        return bytes;
+    }
+    
+    // Обратное к midiToName: имя ноты приложения в номер MIDI.
+    // Нумерация октав та же, поэтому имена сходятся при чтении обратно.
+    function nameToMidi(name) {
+        var text = String(name === null || name === undefined ? '' : name).trim();
+        var match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(text);
+        if (!match) return null;
+        
+        var letters = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+        var base = letters[match[1].toUpperCase()];
+        if (base === undefined) return null;
+        
+        var shift = match[2] === '#' ? 1 : (match[2] === 'b' ? -1 : 0);
+        return (parseInt(match[3], 10) + 1) * 12 + base + shift;
+    }
+    
+    function asciiBytes(text) {
+        var bytes = [];
+        for (var i = 0; i < text.length; i++) bytes.push(text.charCodeAt(i) & 0x7f);
+        return bytes;
+    }
+    
+    function metaText(text) {
+        var bytes = asciiBytes(text);
+        return [0xff, 0x03, bytes.length].concat(bytes);
+    }
+    
+    function metaTempo(bpm) {
+        var microseconds = Math.round(60000000 / bpm);
+        return [0xff, 0x51, 0x03,
+            (microseconds >> 16) & 0xff, (microseconds >> 8) & 0xff, microseconds & 0xff];
+    }
+    
+    function metaSignature(signature) {
+        var parts = String(signature || '4/4').split('/');
+        var numerator = parseInt(parts[0], 10) || 4;
+        var denominator = parseInt(parts[1], 10) || 4;
+        var power = Math.max(0, Math.min(6, Math.round(Math.log(denominator) / Math.log(2))));
+        
+        // 0x18 - 24 тика метронома на четверть, 0x08 - восемь тридцатьвторых
+        return [0xff, 0x58, 0x04, numerator, power, 0x18, 0x08];
+    }
+    
+    function sizeBytes(length) {
+        return [(length >> 24) & 0xff, (length >> 16) & 0xff, (length >> 8) & 0xff, length & 0xff];
+    }
+    
+    // Сборка MIDI-файла. Формат 0, одна дорожка: его читают все музыкальные
+    // программы. Саксофонной части в файле нет - MIDI её не хранит.
+    // notes: [{ midi, startBeat, beats }]
+    function build(data) {
+        var source = data || {};
+        var notes = source.notes || [];
+        var tempo = Math.max(20, Math.min(400, Math.round(source.tempo || 80)));
+        var ticks = TICKS_PER_QUARTER;
+        
+        // На одном тике сначала идут служебные события, потом снятие звука и
+        // только затем взятие: иначе две одинаковые ноты подряд слипнутся
+        var events = [];
+        events.push({ tick: 0, order: -1, bytes: metaText('Saxophone Fingerings') });
+        events.push({ tick: 0, order: -1, bytes: metaTempo(tempo) });
+        events.push({ tick: 0, order: -1, bytes: metaSignature(source.timeSignature) });
+        
+        notes.forEach(function (note) {
+            var midi = Math.max(0, Math.min(127, Math.round(note.midi)));
+            var start = Math.max(0, Math.round((note.startBeat || 0) * ticks));
+            var length = Math.max(1, Math.round((note.beats || 1) * ticks));
+            
+            events.push({ tick: start, order: 1, bytes: [0x90, midi, 100] });
+            events.push({ tick: start + length, order: 0, bytes: [0x80, midi, 64] });
+        });
+        
+        events.sort(function (a, b) {
+            if (a.tick !== b.tick) return a.tick - b.tick;
+            return a.order - b.order;
+        });
+        
+        var track = [];
+        var previous = 0;
+        
+        events.forEach(function (event) {
+            track.push.apply(track, writeVlq(event.tick - previous));
+            track.push.apply(track, event.bytes);
+            previous = event.tick;
+        });
+        
+        track.push(0x00, 0xff, 0x2f, 0x00);
+        
+        var bytes = [];
+        bytes.push.apply(bytes, asciiBytes('MThd'));
+        bytes.push.apply(bytes, [0, 0, 0, 6, 0, 0, 0, 1]);
+        bytes.push.apply(bytes, [(ticks >> 8) & 0xff, ticks & 0xff]);
+        bytes.push.apply(bytes, asciiBytes('MTrk'));
+        bytes.push.apply(bytes, sizeBytes(track.length));
+        bytes.push.apply(bytes, track);
+        
+        return bytes;
+    }
+    
     return {
         parse: parse,
+        build: build,
+        nameToMidi: nameToMidi,
+        writeVlq: writeVlq,
+        TICKS_PER_QUARTER: TICKS_PER_QUARTER,
         toElements: toElements,
         monophonicSegments: monophonicSegments,
         analyzePolyphony: analyzePolyphony,

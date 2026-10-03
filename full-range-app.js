@@ -2864,6 +2864,71 @@ class FullRangeStaffManager {
         }
     }
     
+    // Раскладка мелодии по времени для выгрузки в MIDI. Репетиции
+    // разворачиваются так же, как при проигрывании, а паузы просто
+    // сдвигают время: в MIDI пауза - это отсутствие звука.
+    midiExportNotes() {
+        const sequence = Playback.buildSequence(this.notes);
+        const result = [];
+        let beat = 0;
+        
+        sequence.forEach(element => {
+            const beats = Playback.beatsFor(element.duration, element.dotted);
+            
+            if (!element.isRest) {
+                const midi = Midi.nameToMidi(element.noteName || element.displayName);
+                if (midi !== null) {
+                    result.push({ midi: midi, startBeat: beat, beats: beats });
+                }
+            }
+            
+            beat += beats;
+        });
+        
+        return result;
+    }
+    
+    // Сохранение в MIDI: набранное на планшете можно забрать в другую
+    // музыкальную программу. Аппликатур в файле нет - MIDI их не хранит,
+    // записываются только высота, длительность и темп.
+    saveMidiFile() {
+        try {
+            if (!this.notes.length) {
+                this.updateStatus(t('status.exportEmpty'));
+                return false;
+            }
+            
+            const notes = this.midiExportNotes();
+            if (!notes.length) {
+                this.updateStatus(t('status.exportEmpty'));
+                return false;
+            }
+            
+            const bytes = Midi.build({
+                notes: notes,
+                tempo: this.tempo,
+                timeSignature: this.timeSignature
+            });
+            
+            const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/midi' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'saxophone-fullrange-' + new Date().toISOString().slice(0, 10) + '.mid';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            this.updateStatus(t('status.midiSaved', { count: notes.length }));
+            return true;
+        } catch (error) {
+            this.updateStatus(t('status.saveError', { message: error.message }));
+            return false;
+        }
+    }
+    
     loadFromFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -2916,6 +2981,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('btn-redo').addEventListener('click', () => {
         staffManager.redo();
+    });
+    
+    document.getElementById('btn-midi-save').addEventListener('click', () => {
+        staffManager.saveMidiFile();
     });
     
     document.getElementById('btn-clear').addEventListener('click', () => {
