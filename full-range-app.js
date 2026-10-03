@@ -1548,10 +1548,34 @@ class FullRangeStaffManager {
             note.fingering = `${note.fingeringBase}_v${newVariant}.jpg`;
         }
         
+        // Тот же выбор переносим на все ноты с такой же аппликатурой: одна и та
+        // же высота должна играться одинаково. Такие шаги для отката не храним -
+        // это настройка показа, а не правка мелодии.
+        const twins = this.notes.filter(other =>
+            other !== note && !other.isRest && other.fingeringBase === note.fingeringBase);
+        
+        let updated = 0;
+        twins.forEach(other => {
+            const variant = Math.min(newVariant, other.variants || 1);
+            if (other.currentVariant === variant) return;
+            
+            other.currentVariant = variant;
+            other.fingering = `${other.fingeringBase}_v${variant}.jpg`;
+            this.updateFingering(other);
+            updated++;
+        });
+        
         // Обновляем отображение
         this.updateFingering(note);
         
-        this.updateStatus(t('status.variantChanged', { current: newVariant, total: note.variants }));
+        if (updated > 0) {
+            this.updateStatus(t('status.variantChangedMany', {
+                current: newVariant, total: note.variants, count: updated + 1
+            }));
+        } else {
+            this.updateStatus(t('status.variantChanged', { current: newVariant, total: note.variants }));
+        }
+        
         this.scheduleAutosave();
         return true;
     }
@@ -1691,10 +1715,12 @@ class FullRangeStaffManager {
                     prevBtn.style.height = metrics.button + 'px';
                     prevBtn.style.flex = '0 0 auto';
                     prevBtn.style.cursor = 'pointer';
-                    prevBtn.style.fontSize = metrics.fontSize + 'px';
+                    prevBtn.style.fontSize = (metrics.fontSize + 2) + 'px';
                     prevBtn.style.lineHeight = '1';
                     prevBtn.style.padding = '0';
                     prevBtn.style.color = '#4a5568';
+                    prevBtn.style.fontWeight = 'bold';
+                    prevBtn.style.webkitTextStroke = '0.4px #4a5568';
                     prevBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         if (note.id === this.selectedNoteId) {
@@ -1723,10 +1749,12 @@ class FullRangeStaffManager {
                     nextBtn.style.height = metrics.button + 'px';
                     nextBtn.style.flex = '0 0 auto';
                     nextBtn.style.cursor = 'pointer';
-                    nextBtn.style.fontSize = metrics.fontSize + 'px';
+                    nextBtn.style.fontSize = (metrics.fontSize + 2) + 'px';
                     nextBtn.style.lineHeight = '1';
                     nextBtn.style.padding = '0';
                     nextBtn.style.color = '#4a5568';
+                    nextBtn.style.fontWeight = 'bold';
+                    nextBtn.style.webkitTextStroke = '0.4px #4a5568';
                     nextBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         if (note.id === this.selectedNoteId) {
