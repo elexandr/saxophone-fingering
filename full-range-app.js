@@ -11,6 +11,10 @@ const STAFF_BOTTOM_LEDGER = STAFF_MAIN_BOTTOM + 4 * STAFF_LINE_SPACING; // 320
 const STAFF_CLEF_WIDTH = 72; // место под скрипичный ключ и отступ до первой ноты
 // Знак ноты рисуется в рамке 60px по центру ноты, то есть на 30px в каждую сторону
 const GLYPH_HALF_WIDTH = 30;
+// Высота ряда аппликатур при полном масштабе: карточка и панель вариантов
+const FINGERING_ROW_HEIGHT = 230;
+// Ниже этого предела строку не уменьшаем: аппликатуру уже не разобрать
+const MIN_SYSTEM_SCALE = 0.6;
 // Отступ от верха области, когда показываем звучащую строку
 const PLAYBACK_SCROLL_MARGIN = 8;
 // Пауза между кругами при игре по кругу: за неё стан успевает подняться
@@ -426,7 +430,54 @@ class FullRangeStaffManager {
     // Ширина, доступная под одну строку
     staffWidth() {
         const width = this.container ? this.container.clientWidth : 0;
-        return width > 120 ? width : 900;
+        // При уменьшении строки её собственная ширина больше экранной:
+        // раскладка должна считать в её собственных пикселях
+        const usable = width / (this.systemScaleValue || 1);
+        return usable > 120 ? usable : 900;
+    }
+    
+    // Сколько высоты остаётся под строку: окно минус шапка, панель и подвал
+    viewportFreeHeight() {
+        let chrome = 0;
+        ['.app-header', '.staff-header', '.app-footer'].forEach(selector => {
+            const node = document.querySelector(selector);
+            if (node && !node.hidden) chrome += node.getBoundingClientRect().height;
+        });
+        return window.innerHeight - chrome - 24;
+    }
+    
+    // Масштаб строки. На низком экране строка со станом и аппликатурами
+    // не помещается целиком, а учиться по обрезанной картинке нельзя.
+    // Уменьшаем строку целиком: zoom, в отличие от transform, меняет и
+    // раскладку, поэтому ширина задаётся обратной долей - и строка
+    // по-прежнему занимает всю ширину экрана, просто мельче.
+    systemScale() {
+        const metrics = this.systemMetrics();
+        const required = metrics.height + FINGERING_ROW_HEIGHT + 34;
+        const available = this.viewportFreeHeight();
+        
+        if (available <= 0 || required <= available) return 1;
+        
+        const scale = available / required;
+        return Math.max(MIN_SYSTEM_SCALE, Math.round(scale * 100) / 100);
+    }
+    
+    // Применяем масштаб к строкам: zoom плюс обратная ширина
+    applySystemScale() {
+        const scale = this.systemScaleValue || 1;
+        
+        this.staffContainers.forEach(staff => {
+            const system = staff.closest('.system');
+            if (!system) return;
+            
+            if (scale === 1) {
+                system.style.zoom = '';
+                system.style.width = '';
+            } else {
+                system.style.zoom = String(scale);
+                system.style.width = (100 / scale) + '%';
+            }
+        });
     }
     
     // Сколько элементов влезает в одну строку (минус место под ключ)
@@ -1584,6 +1635,10 @@ class FullRangeStaffManager {
     // Раскладка мелодии по строкам: системы, координаты, черты и аппликатуры.
     // Разбивка на строки описана в computeSystems.
     updateNotePositions() {
+        // Масштаб строки считаем до раскладки: от него зависит, сколько
+        // нот помещается в строку на этом экране
+        this.systemScaleValue = this.systemScale();
+        
         // Ширина строки зависит от того, появилась ли вертикальная прокрутка,
         // а прокрутка - от числа строк. Поэтому считаем раскладку, пока она
         // не установится: иначе карточки сжимаются и расходятся с чертами.
@@ -1597,6 +1652,8 @@ class FullRangeStaffManager {
             if (!changed) break;
             this.syncSystems(systems.length);
         }
+        
+        this.applySystemScale();
         
         const slot = this.imageSize + 2;
         

@@ -822,6 +822,21 @@ body {
     text-decoration: underline;
 }
 
+/* Короткий экран: поджимаем всё, кроме стана, чтобы строке досталось больше места */
+@media (max-height: 760px) {
+    .app-header {
+        padding: 4px 12px;
+    }
+
+    .staff-header {
+        padding: 3px 10px;
+    }
+
+    .app-footer {
+        padding: 2px 12px;
+    }
+}
+
 /* Пустое место в ряду аппликатур напротив паузы: держит выравнивание по горизонтали */
 .fingering-spacer {
     flex: 0 0 auto; /* Ширина ровно по шагу ноты, без сжатия */
