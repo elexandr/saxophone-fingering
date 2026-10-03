@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Страницу не нужно показывать поисковикам: это личный инструмент,
+         а в окне «О проекте» есть адрес для связи -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="referrer" content="no-referrer">
+    <title data-i18n="app.docTitle">Saxophone Fingering Assistant</title>
+    <link rel="stylesheet" href="simple-styles.css?v=1.8.1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Шапка: название, сводка, язык и «О проекте» в одну строку -->
+        <header class="app-header">
+            <h1><i class="fas fa-saxophone"></i> <span data-i18n="app.title">Saxophone Fingering Assistant</span></h1>
+
+            <div class="app-info">
+                <div class="info-item">
+                    <span class="info-label" data-i18n="app.notes">Нот:</span>
+                    <span id="note-count" class="info-value">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" data-i18n="app.selected">Выделенная:</span>
+                    <span id="selected-note" class="info-value" data-i18n="app.none">нет</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" data-i18n="app.range">Диапазон:</span>
+                    <span id="range-info" class="info-value">C2 - A5</span>
+                </div>
+            </div>
+
+            <div class="app-actions">
+                <div class="lang-switch" role="group" aria-label="Language">
+                    <button type="button" class="lang-btn" data-lang="ru" title="Русский">RU</button>
+                    <button type="button" class="lang-btn" data-lang="en" title="English">EN</button>
+                </div>
+                <button type="button" id="btn-about" class="btn-ghost" data-i18n-title="app.aboutHint">
+                    <i class="fas fa-circle-info"></i> <span data-i18n="app.about">О проекте</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Основная область с нотным станом и аппликатурами -->
+        <main class="main-content">
+            <!-- Панель управления слева. Пояснения к разделам - в подсказках при наведении. -->
+            <aside class="control-panel">
+                <div class="control-section">
+                    <h3 data-i18n-title="panel.notes.hint">
+                        <i class="fas fa-sliders-h"></i> <span data-i18n="panel.notes">Управление нотами</span>
+                    </h3>
+                    <div class="control-group">
+                        <button id="btn-note-up" class="btn-control" disabled data-i18n-title="btn.noteUp.hint">
+                            <i class="fas fa-arrow-up"></i> <span data-i18n="btn.noteUp">Поднять ноту</span>
+                        </button>
+                        <button id="btn-note-down" class="btn-control" disabled data-i18n-title="btn.noteDown.hint">
+                            <i class="fas fa-arrow-down"></i> <span data-i18n="btn.noteDown">Опустить ноту</span>
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="btn-delete-note" class="btn-control btn-danger" disabled data-i18n-title="btn.delete.hint">
+                            <i class="fas fa-times"></i> <span data-i18n="btn.delete">Удалить ноту</span>
+                        </button>
+                        <button id="btn-clear" class="btn-control btn-danger" data-i18n-title="btn.clear.hint">
+                            <i class="fas fa-trash"></i> <span data-i18n="btn.clear">Очистить все</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3 data-i18n-title="panel.rests.hint">
+                        <i class="fas fa-pause-circle"></i> <span data-i18n="panel.rests">Паузы</span>
+                    </h3>
+                    <div class="control-group">
+                        <button id="btn-add-rest" class="btn-control" data-i18n-title="btn.addRest.hint">
+                            <i class="fas fa-plus"></i> <span data-i18n="btn.addRest">Добавить паузу</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3 data-i18n-title="panel.play.hint">
+                        <i class="fas fa-play-circle"></i> <span data-i18n="panel.play">Воспроизведение</span>
+                    </h3>
+                    <div class="setting-group">
+                        <label for="tempo-input" data-i18n="setting.tempo">Темп, BPM:</label>
+                        <input type="number" id="tempo-input" class="number-input" min="30" max="240" step="1"
+                               value="80" data-i18n-title="setting.tempo.hint">
+                        <label class="checkbox-label loop-label" for="loop-playback" data-i18n-title="setting.loop.hint">
+                            <input type="checkbox" id="loop-playback">
+                            <i class="fas fa-repeat"></i> <span data-i18n="setting.loop">Играть по кругу</span>
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <button id="btn-play" class="btn-control btn-success" data-i18n-title="btn.play.hint">
+                            <i class="fas fa-play"></i> <span data-i18n="btn.play">Играть</span>
+                        </button>
+                        <button id="btn-stop" class="btn-control btn-danger" disabled data-i18n-title="btn.stop.hint">
+                            <i class="fas fa-stop"></i> <span data-i18n="btn.stop">Стоп</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3 data-i18n-title="panel.measures.hint">
+                        <i class="fas fa-grip-lines-vertical"></i> <span data-i18n="panel.measures">Размер и такты</span>
+                    </h3>
+                    <div class="setting-group">
+                        <label for="time-signature" data-i18n="setting.signature">Размер такта:</label>
+                        <select id="time-signature" class="select-input" data-i18n-title="setting.signature.hint">
+                            <option value="4/4">4/4</option>
+                            <option value="3/4">3/4</option>
+                            <option value="2/4">2/4</option>
+                            <option value="6/8">6/8</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label class="radio-group-label" data-i18n="setting.barlines">Тактовые черты:</label>
+                        <div class="radio-group">
+                            <label class="radio-label" data-i18n-title="setting.barlines.autoHint">
+                                <input type="radio" name="barline-mode" value="auto" checked>
+                                <span data-i18n="setting.barlines.auto">Автоматически</span>
+                            </label>
+                            <label class="radio-label" data-i18n-title="setting.barlines.manualHint">
+                                <input type="radio" name="barline-mode" value="manual">
+                                <span data-i18n="setting.barlines.manual">Вручную</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <button id="btn-add-barline" class="btn-control" disabled data-i18n-title="btn.addBarline.hint">
+                            <i class="fas fa-plus"></i> <span data-i18n="btn.addBarline">Добавить черту</span>
+                        </button>
+                        <button id="btn-remove-barline" class="btn-control btn-danger" disabled data-i18n-title="btn.removeBarline.hint">
+                            <i class="fas fa-minus"></i> <span data-i18n="btn.removeBarline">Удалить черту</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3 data-i18n-title="panel.repeat.hint">
+                        <i class="fas fa-redo"></i> <span data-i18n="panel.repeat">Реприза</span>
+                    </h3>
+                    <div class="control-group">
+                        <button id="btn-repeat-start" class="btn-control" disabled data-i18n-title="btn.repeatStart.hint">
+                            <i class="fas fa-step-backward"></i> <span data-i18n="btn.repeatStart">Начать репризу</span>
+                        </button>
+                        <button id="btn-repeat-end" class="btn-control" disabled data-i18n-title="btn.repeatEnd.hint">
+                            <i class="fas fa-step-forward"></i> <span data-i18n="btn.repeatEnd">Закончить репризу</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3 data-i18n-title="panel.save.hint">
+                        <i class="fas fa-save"></i> <span data-i18n="panel.save">Сохранение</span>
+                    </h3>
+                    <div class="control-group">
+                        <button id="btn-save" class="btn-control btn-success" data-i18n-title="btn.save.hint">
+                            <i class="fas fa-download"></i> <span data-i18n="btn.save">Сохранить</span>
+                        </button>
+                        <button id="btn-load" class="btn-control" data-i18n-title="btn.load.hint">
+                            <i class="fas fa-upload"></i> <span data-i18n="btn.load">Загрузить</span>
+                        </button>
+                        <button id="btn-midi" class="btn-control" data-i18n-title="btn.midi.hint">
+                            <i class="fas fa-music"></i> <span data-i18n="btn.midi">Загрузить MIDI</span>
+                        </button>
+                    </div>
+                    <input type="file" id="file-input" accept=".json" style="display: none;">
+                    <input type="file" id="midi-input" accept=".mid,.midi,audio/midi,audio/x-midi" style="display: none;">
+                </div>
+
+                <div class="control-section">
+                    <h3 data-i18n-title="panel.settings.hint">
+                        <i class="fas fa-cog"></i> <span data-i18n="panel.settings">Настройки</span>
+                    </h3>
+
+                    <div class="setting-group">
+                        <label for="image-size-slider" data-i18n-title="setting.imageSize.hint">
+                            <i class="fas fa-expand-alt"></i> <span data-i18n="setting.imageSize">Размер картинок:</span>
+                            <span id="image-size-value">80px</span>
+                        </label>
+                        <input type="range" id="image-size-slider" min="50" max="200" value="80" class="slider"
+                               data-i18n-title="setting.imageSize.hint">
+                    </div>
+
+                    <div class="setting-group">
+                        <label for="show-note-names" class="checkbox-label" data-i18n-title="setting.noteNames.hint">
+                            <input type="checkbox" id="show-note-names" checked>
+                            <i class="fas fa-font"></i> <span data-i18n="setting.noteNames">Показывать названия нот</span>
+                        </label>
+                    </div>
+
+                    <div class="setting-group">
+                        <label for="show-fingerings" class="checkbox-label" data-i18n-title="setting.fingerings.hint">
+                            <input type="checkbox" id="show-fingerings" checked>
+                            <i class="fas fa-hands"></i> <span data-i18n="setting.fingerings">Показывать аппликатуры</span>
+                        </label>
+                    </div>
+
+                    <div class="setting-group">
+                        <label class="radio-group-label" data-i18n-title="setting.accidentals.hint">
+                            <i class="fas fa-sharp"></i> <span data-i18n="setting.accidentals">Отображение альтераций:</span>
+                        </label>
+                        <div class="radio-group">
+                            <label class="radio-label" data-i18n-title="setting.accidentals.sharpsHint">
+                                <input type="radio" name="accidentals-mode" value="sharps" checked>
+                                <span data-i18n="setting.accidentals.sharps">Диезы (#)</span>
+                            </label>
+                            <label class="radio-label" data-i18n-title="setting.accidentals.flatsHint">
+                                <input type="radio" name="accidentals-mode" value="flats">
+                                <span data-i18n="setting.accidentals.flats">Бемоли (b)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Центральная область с нотным станом -->
+            <section class="staff-area">
+                <div class="staff-container">
+                    <div class="staff-header">
+                        <div class="control-group staff-header-buttons">
+                            <button id="btn-transpose-up" class="btn-control" data-i18n-title="btn.transposeUp.hint">
+                                <i class="fas fa-arrow-up"></i> <span data-i18n="btn.transposeUp">Все вверх</span>
+                            </button>
+                            <button id="btn-transpose-down" class="btn-control" data-i18n-title="btn.transposeDown.hint">
+                                <i class="fas fa-arrow-down"></i> <span data-i18n="btn.transposeDown">Все вниз</span>
+                            </button>
+                        </div>
+                        <div class="staff-info">
+                            <span id="measure-info"></span>
+                            <span data-i18n="staff.positions">Позиций: 27</span>
+                            <span id="fingering-count"></span>
+                            <span id="selected-note-info" data-i18n="staff.noSelection">Нет выделенной ноты</span>
+                        </div>
+                    </div>
+
+                    <!-- Строки стана. Строки строятся в JS: нота и её аппликатура
+                         всегда на одной строке, перенос - по границам тактов. -->
+                    <div class="scrollable-area">
+                        <div id="systems" class="systems"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Статусная строка -->
+        <footer class="app-footer">
+            <div class="status-bar">
+                <span id="status-message" data-i18n="status.ready">Готов к работе. Кликните на маркер позиции, чтобы добавить ноту.</span>
+                <span id="cache-status" class="cache-status"></span>
+                <span class="app-version">v1.8.1</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Предупреждение о сохранении настроек в браузере -->
+    <div id="consent" class="consent" hidden>
+        <p data-i18n="consent.text">Чтобы открывать приложение на выбранном языке, настройка сохраняется в вашем браузере.</p>
+        <button type="button" id="consent-ok" class="btn-control btn-success" data-i18n="consent.ok">Понятно</button>
+    </div>
+
+    <!-- О проекте -->
+    <div id="about-modal" class="modal" hidden>
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="about-title">
+            <div class="modal-head">
+                <h2 id="about-title" data-i18n="about.title">О проекте</h2>
+                <button type="button" class="modal-close" data-close-modal data-i18n-title="about.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p data-i18n="about.p1"></p>
+                <p data-i18n="about.p2"></p>
+                <p data-i18n="about.p3"></p>
+                <p data-i18n="about.p4"></p>
+                <p data-i18n="about.p5"></p>
+                <p data-i18n="about.p6"></p>
+                <p data-i18n="about.p7"></p>
+                <p data-i18n="about.p8"></p>
+                <!-- Адрес собирается в скрипте и только по нажатию: готовой
+                     ссылки и самого адреса в разметке нет -->
+                <p class="about-contact" id="about-contact">
+                    <span data-i18n="about.contact">Для связи</span>
+                    <button type="button" id="about-contact-show" class="about-contact-show"
+                            data-i18n="about.contactShow">показать адрес</button>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Скрипты -->
+    <script src="i18n.js?v=1.8.1"></script>
+    <script src="note-symbols.js?v=1.8.1"></script>
+    <script src="playback.js?v=1.8.1"></script>
+    <script src="image-cache.js?v=1.8.1"></script>
+    <script src="midi.js?v=1.8.1"></script>
+    <script src="full-range-app.js?v=1.8.1"></script>
+</body>
+</html>
