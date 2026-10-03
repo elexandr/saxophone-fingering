@@ -430,8 +430,10 @@ class FullRangeStaffManager {
     // Ширина, доступная под одну строку
     staffWidth() {
         const width = this.container ? this.container.clientWidth : 0;
-        // При уменьшении строки её собственная ширина больше экранной:
-        // раскладка должна считать в её собственных пикселях
+        // Контейнер не масштабируется, а строка внутри него - да: при zoom
+        // собственные пиксели строки крупнее экранных во столько же раз.
+        // Раскладке нужна именно ширина строки в её пикселях, иначе ноты
+        // займут лишь часть стана и справа останутся пустые линейки.
         const usable = width / (this.systemScaleValue || 1);
         return usable > 120 ? usable : 900;
     }
@@ -462,7 +464,10 @@ class FullRangeStaffManager {
         return Math.max(MIN_SYSTEM_SCALE, Math.round(scale * 100) / 100);
     }
     
-    // Применяем масштаб к строкам: zoom плюс обратная ширина
+    // Применяем масштаб к строкам. Ширину не трогаем: zoom сам меняет систему
+    // координат строки, поэтому width: 100% даёт ровно ширину экрана, а
+    // собственные пиксели строки становятся крупнее - в них влезает больше нот.
+    // Если задать ширину обратной долей, строка вылезет за экран вправо.
     applySystemScale() {
         const scale = this.systemScaleValue || 1;
         
@@ -470,13 +475,7 @@ class FullRangeStaffManager {
             const system = staff.closest('.system');
             if (!system) return;
             
-            if (scale === 1) {
-                system.style.zoom = '';
-                system.style.width = '';
-            } else {
-                system.style.zoom = String(scale);
-                system.style.width = (100 / scale) + '%';
-            }
+            system.style.zoom = scale === 1 ? '' : String(scale);
         });
     }
     
