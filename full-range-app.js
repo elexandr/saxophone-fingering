@@ -1729,9 +1729,9 @@ class FullRangeStaffManager {
                     prevBtn.style.fontSize = (metrics.fontSize + 2) + 'px';
                     prevBtn.style.lineHeight = '1';
                     prevBtn.style.padding = '0';
-                    prevBtn.style.color = '#4a5568';
+                    prevBtn.style.color = '#000000';
                     prevBtn.style.fontWeight = 'bold';
-                    prevBtn.style.webkitTextStroke = '0.4px #4a5568';
+                    prevBtn.style.webkitTextStroke = '0.4px #000000';
                     prevBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         if (note.id === this.selectedNoteId) {
@@ -1763,9 +1763,9 @@ class FullRangeStaffManager {
                     nextBtn.style.fontSize = (metrics.fontSize + 2) + 'px';
                     nextBtn.style.lineHeight = '1';
                     nextBtn.style.padding = '0';
-                    nextBtn.style.color = '#4a5568';
+                    nextBtn.style.color = '#000000';
                     nextBtn.style.fontWeight = 'bold';
-                    nextBtn.style.webkitTextStroke = '0.4px #4a5568';
+                    nextBtn.style.webkitTextStroke = '0.4px #000000';
                     nextBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         if (note.id === this.selectedNoteId) {
