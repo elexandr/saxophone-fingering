@@ -2990,6 +2990,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('btn-midi-save').addEventListener('click', () => {
         staffManager.saveMidiFile();
+        releaseButtonFocus();
     });
     
     document.getElementById('btn-clear').addEventListener('click', () => {
@@ -3010,11 +3011,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Сохранение/загрузка
     document.getElementById('btn-save').addEventListener('click', () => {
         staffManager.saveToFile();
+        releaseButtonFocus();
     });
     
     document.getElementById('btn-load').addEventListener('click', () => {
         document.getElementById('file-input').click();
     });
+    
+    // После работы с файлами кнопка остаётся в фокусе. Тогда следующее
+    // нажатие пробела нажимает её снова: вместо проигрывания открывается
+    // выбор файла. Снимаем фокус - дальше пробел снова управляет музыкой.
+    function releaseButtonFocus() {
+        const active = document.activeElement;
+        if (active && active.tagName === 'BUTTON') active.blur();
+    }
     
     document.getElementById('file-input').addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -3022,6 +3032,7 @@ document.addEventListener('DOMContentLoaded', () => {
             staffManager.loadFromFile(file);
         }
         e.target.value = ''; // Сбрасываем значение
+        releaseButtonFocus();
     });
     
     // Загрузка MIDI
@@ -3037,6 +3048,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 staffManager.readMidiFile(file);
             }
             e.target.value = ''; // Чтобы тот же файл можно было выбрать снова
+        releaseButtonFocus();
         });
     }
     
