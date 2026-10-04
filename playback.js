@@ -166,7 +166,14 @@
         if (this.ctx) return this.ctx;
         if (!audioSupported()) return null;
         var Ctor = window.AudioContext || window.webkitAudioContext;
-        this.ctx = new Ctor();
+
+        // interactive просит маленький буфер: чем меньше задержка вывода,
+        // тем ближе подсветка к тому, что слышно
+        try {
+            this.ctx = new Ctor({ latencyHint: 'interactive' });
+        } catch (error) {
+            this.ctx = new Ctor();
+        }
         this.master = this.ctx.createGain();
         this.master.gain.value = 0.45;
         this.master.connect(this.ctx.destination);
@@ -231,6 +238,14 @@
     // elements: [{ noteName, duration, dotted, isRest }], handlers: { onElement, onEnd, onUnsupported }
     // options: { leadIn, tailMs } - пауза перед началом и после конца в секундах и миллисекундах.
     // Для повтора по кругу их задают нулевыми, чтобы круг начинался без разрыва.
+    // Сколько времени проходит от планирования звука до его звучания.
+    // Chrome отдаёт baseLatency и outputLatency; если их нет - считаем ноль.
+    MelodyPlayer.prototype.outputLag = function () {
+        if (!this.ctx) return 0;
+        var base = typeof this.ctx.baseLatency === 'number' ? this.ctx.baseLatency : 0;
+        var output = typeof this.ctx.outputLatency === 'number' ? this.ctx.outputLatency : 0;
+        return base + output;
+    };
     MelodyPlayer.prototype.play = function (elements, tempo, handlers, options) {
         handlers = handlers || {};
         options = options || {};
@@ -281,14 +296,19 @@
 
             var now = self.ctx ? self.ctx.currentTime : 0;
 
+            // Поправку на задержку вывода не применяем: наблюдение на планшете
+            // показало отставание подсветки, а не спешку. Причина отставания -
+            // занятый главный поток, и лечится она разгрузкой кадра
+            var heard = now;
+
             while (self.timelineIndex < timeline.length &&
-                   timeline[self.timelineIndex].startAt <= now) {
+                   timeline[self.timelineIndex].startAt <= heard) {
                 var step = timeline[self.timelineIndex];
                 self.timelineIndex++;
                 if (handlers.onElement) handlers.onElement(step.index, step.element);
             }
 
-            if (now >= self.endsAt) {
+            if (heard >= self.endsAt) {
                 self.playing = false;
                 self.frame = null;
                 if (handlers.onEnd) handlers.onEnd();

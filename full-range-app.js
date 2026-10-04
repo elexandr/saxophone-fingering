@@ -1775,6 +1775,9 @@ class FullRangeStaffManager {
                 
                 const img = document.createElement('img');
                 img.className = 'fingering-image';
+                // Декодируем вне главного потока: синхронное декодирование
+                // большой картинки в момент подсветки давало рывки
+                img.decoding = 'async';
                 // Путь берём из кэша, если он доступен; иначе - напрямую из папки
                 img.src = this.imageUrl(note.fingering);
                 img.alt = t('card.imageAlt', { name: note.displayName });
@@ -2044,7 +2047,8 @@ class FullRangeStaffManager {
         const slot = this.imageSize + 2;
         
         systems.forEach((system, systemIndex) => {
-            const staff = this.staffContainers[systemIndex];
+
+        const staff = this.staffContainers[systemIndex];
             if (!staff) return;
             
             system.forEach((element, position) => {
@@ -2638,6 +2642,14 @@ class FullRangeStaffManager {
             systemIndex += 1;
         }
         
+        // Читаем координаты только при смене строки: иначе на каждую ноту
+        // идёт принудительный пересчёт вёрстки, и подсветка подтормаживает
+        // Один раз на строку: повторные чтения координат тормозят подсветку.
+        // Но если область прокрутили вручную, следим заново
+        const scrolledByHand = area.scrollTop !== this.followedScrollTop;
+        if (!options.instant && this.followedSystem === systemIndex && !scrolledByHand) return;
+        this.followedScrollTop = area.scrollTop;
+
         const staff = this.staffContainers[systemIndex];
         // Именно строка целиком: в неё входят и стан, и ряд аппликатур.
         // Если взять обёртку стана, аппликатуры остаются за краем области.
@@ -2675,6 +2687,19 @@ class FullRangeStaffManager {
     }
     
     // Подсветка элемента, который звучит сейчас: знак на стане и карточка аппликатуры
+    // Узлы подсветки готовим заранее: в кадре не должно быть поиска по документу,
+    // иначе подсветка отстаёт от звука на время этого поиска
+    prepareHighlightNodes(sequence) {
+        this.highlightNodes = new Map();
+
+        (sequence || []).forEach(element => {
+            if (!element || !element.id) return;
+            this.highlightNodes.set(element.id, {
+                anchor: element.element,
+                card: document.querySelector('.fingering-card[data-note-id="' + element.id + '"]')
+            });
+        });
+    }
     // Подсветка звучащего элемента. Снимаем класс только с прошлого: обход
     // всего стана на каждую ноту заметно тормозил подсветку
     highlightElement(element) {        const previousNote = this.playingNote;
@@ -2693,7 +2718,8 @@ class FullRangeStaffManager {
             this.playingNote = element;
         }
         
-        const card = document.querySelector('.fingering-card[data-note-id="' + element.id + '"]');
+        const prepared = this.highlightNodes && this.highlightNodes.get(element.id);
+        const card = prepared ? prepared.card : document.querySelector('.fingering-card[data-note-id="' + element.id + '"]');
         if (card) {
             card.classList.add('playing');
             this.playingCard = card;
@@ -3321,10 +3347,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // мгновенное, а на отрисовку кадра есть запас leadIn в плеере
             staffManager.followPlayback(sequence[0], { instant: true });
             
+            // Узлы подсветки готовим заранее: в кадре не должно быть поиска по документу
+            staffManager.prepareHighlightNodes(sequence);
+
             const started = staffManager.melodyPlayer.play(sequence, staffManager.tempo, {
                 onElement: (index, element) => {
                     staffManager.highlightElement(element);
-                    staffManager.followPlayback(element);
+                    staffManager.followPlayback(element, { instant: true });
                 },
                 onEnd: () => {
                     // По кругу - пауза, за неё стан поднимается на первую строку,

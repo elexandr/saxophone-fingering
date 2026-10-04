@@ -1285,3 +1285,9 @@ body {
     pointer-events: none;
     user-select: none;
 }
+/* Строки вне экрана браузер не рисует: иначе прокрутка к следующей строке
+   перерисовывает весь ряд картинок и подсветка отстаёт рывками */
+.system {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 520px;
+}
