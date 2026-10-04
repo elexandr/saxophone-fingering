@@ -671,6 +671,54 @@ class FullRangeStaffManager {
         staff.appendChild(clef);
     }
     
+    // Левый край последнего такта в координатах стана
+    lastMeasureLeft() {
+        if (!this.notes.length) return null;
+
+        const measure = this.measureBeats();
+        const slot = this.imageSize + 2;
+        let total = 0;
+        this.notes.forEach(element => { total += this.elementBeats(element); });
+
+        const lastStart = Math.max(0, Math.floor((total - 1e-6) / measure) * measure);
+        let beat = 0;
+
+        for (let i = 0; i < this.notes.length; i++) {
+            const element = this.notes[i];
+            const beats = this.elementBeats(element);
+
+            if (beat + beats > lastStart + 1e-6) {
+                const share = beats > 0 ? Math.max(0, (lastStart - beat) / beats) : 0;
+                return element.x - slot / 2 + slot * share;
+            }
+
+            beat += beats;
+        }
+
+        return null;
+    }
+
+    // Новую ноту ставим только в последнем такте последней строки: промах по
+    // стану при правке иначе добавлял в конец мелодии лишнюю ноту
+    canAddNoteAt(event) {
+        if (!this.notes.length) return true;
+
+        const marker = event.currentTarget;
+        const index = this.staffContainers.findIndex(node => node.contains(marker));
+        if (index === -1) return true;
+
+        const lastSystem = this.notes[this.notes.length - 1].system;
+        if (index !== lastSystem) return false;
+
+        const from = this.lastMeasureLeft();
+        if (from === null) return true;
+
+        const box = this.staffContainers[index].getBoundingClientRect();
+        const zoom = this.systemScaleValue || 1;
+        const x = (event.clientX - box.left) / zoom;
+
+        return x >= from - 1;
+    }
     drawPositionMarkers(staff) {
         this.positions.forEach(position => {
             const marker = document.createElement('div');
@@ -683,6 +731,9 @@ class FullRangeStaffManager {
             
             marker.addEventListener('click', (e) => {
                 e.stopPropagation();
+                // Только последний такт: промах по стану не должен добавлять ноту
+                if (!this.canAddNoteAt(e)) return;
+
                 this.addNote(position.id);
             });
             
