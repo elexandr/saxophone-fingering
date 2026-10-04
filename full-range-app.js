@@ -267,7 +267,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }
         
         this.bindLanguageSwitch();
-        this.bindAboutModal();
+        this.bindModal('about-modal', 'btn-about');
+        this.bindModal('help-modal', 'btn-help');
         this.initConsent();
         this.updateLanguageButtons();
         this.updateBarLineButtons();
@@ -329,9 +330,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             : t('note.info', { name: element.displayName, position: element.positionId });
     }
     
-    bindAboutModal() {
-        const modal = document.getElementById('about-modal');
-        const openButton = document.getElementById('btn-about');
+    bindModal(modalId, buttonId) {
+        const modal = document.getElementById(modalId);
+        const openButton = document.getElementById(buttonId);
         if (!modal || !openButton) return;
         
         const close = () => { modal.hidden = true; };
@@ -3617,7 +3618,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (event.target && event.target.closest && event.target.closest('button, a')) return;
             
             // При открытом окне «О проекте» пробел не должен включать музыку
-            if (document.querySelector('#about-modal:not([hidden])')) return;
+            if (document.querySelector('#about-modal:not([hidden]), #help-modal:not([hidden])')) return;
             
             event.preventDefault();
             toggleMelody();
@@ -3635,7 +3636,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isLeft && !isRight && !isUp && !isDown && !isDelete && !isInsert) return;
         
         // При открытом окне стрелки не должны двигать ноты за ним
-        if (document.querySelector('#about-modal:not([hidden])')) return;
+        if (document.querySelector('#about-modal:not([hidden]), #help-modal:not([hidden])')) return;
         
         // Влево и вправо - переход по ногам
         if (isLeft || isRight) {
