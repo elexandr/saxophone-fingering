@@ -1224,3 +1224,27 @@ body {
     align-items: center;
     gap: 8px;
 }
+/* Кнопки точек в окошке длительности: одна, две и три */
+.dot-choices {
+    display: flex;
+    gap: 2px;
+}
+
+.dot-choice {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border: 1px solid #cbd5e0;
+    border-radius: 3px;
+    background: #ffffff;
+    color: #4a5568;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.dot-choice.active {
+    border-color: #667eea;
+    background: #667eea;
+    color: #ffffff;
+}

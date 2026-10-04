@@ -17,28 +17,10 @@ const FINGERING_ROW_HEIGHT = 230;
 const MIN_SYSTEM_SCALE = 0.6;
 const HISTORY_LIMIT = 50;
 // Длительности от самой длинной к самой короткой. По этой лесенке ходят
-// Alt+вверх и Alt+вниз, поэтому точка стоит отдельной ступенью.
-const DURATION_LADDER = (() => {
-    // От самой длинной к самой короткой, каждая точка - отдельная ступень
-    const steps = [];
-    [1, 2, 4, 8, 16].forEach(duration => {
-        for (let dots = 3; dots >= 0; dots--) steps.push({ duration: duration, dotted: dots });
-    });
-    return steps;
-})();
+// Alt+вверх и Alt+вниз. Точки в неё не входят: их ставят отдельно, кнопками
+// в окошке длительности
+const DURATION_LADDER = [1, 2, 4, 8, 16];
 
-const DURATION_LADDER_UNUSED = [
-    { duration: 1, dotted: true },
-    { duration: 1, dotted: false },
-    { duration: 2, dotted: true },
-    { duration: 2, dotted: false },
-    { duration: 4, dotted: true },
-    { duration: 4, dotted: false },
-    { duration: 8, dotted: true },
-    { duration: 8, dotted: false },
-    { duration: 16, dotted: true },
-    { duration: 16, dotted: false }
-];
 // Отступ от верха области, когда показываем звучащую строку
 const PLAYBACK_SCROLL_MARGIN = 8;
 // Пауза между кругами при игре по кругу: за неё стан успевает подняться
@@ -866,11 +848,21 @@ class FullRangeStaffManager {
     }
     
     // Подпись кнопки точек: сколько точек стоит у ноты
-    dotsLabel(element) {
-        const dots = Playback.dotCount(element.dotted);
-        return dots > 0 ? '•'.repeat(dots) : '•';
+    // Три отдельные кнопки: одна, две и три точки. Окошко показывается
+    // только у выделенной ноты, поэтому место есть
+    dotsChoiceMarkup(element) {
+        const current = Playback.dotCount(element.dotted);
+        let markup = '<span class="dot-choices">';
+    
+        for (let count = 1; count <= 3; count++) {
+            const dots = '•'.repeat(count);
+            const active = current === count ? ' active' : '';
+            markup += `<button type="button" class="dot-choice${active}" data-dots="${count}" ` +
+                `title="${t('duration.dot' + count)}">${dots}</button>`;
+        }
+    
+        return markup + '</span>';
     }
-
     durationPanelMarkup(element) {
         const options = NoteSymbols.DURATIONS.map(item =>
             `<button type="button" class="duration-option${item.value === element.duration ? ' active' : ''}" ` +
@@ -880,8 +872,7 @@ class FullRangeStaffManager {
         return '<div class="duration-panel">' +
             `<button type="button" class="duration-btn" title="${t('duration.buttonTitle')}">` +
             NoteSymbols.durationInfo(element.duration).short + '</button>' +
-            `<button type="button" class="dot-toggle${Playback.dotCount(element.dotted) ? ' active' : ''}" ` +
-            `title="${t('duration.dotTitle')}">${this.dotsLabel(element)}</button>` +
+            this.dotsChoiceMarkup(element) +
             `<div class="duration-menu">${options}</div>` +
             '</div>';
     }
@@ -889,7 +880,7 @@ class FullRangeStaffManager {
     bindDurationPanel(anchor, element) {
         const button = anchor.querySelector('.duration-btn');
         const menu = anchor.querySelector('.duration-menu');
-        const dot = anchor.querySelector('.dot-toggle');
+        const dotChoices = anchor.querySelectorAll('.dot-choice');
         
         button.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -904,11 +895,7 @@ class FullRangeStaffManager {
             });
         });
         
-        dot.addEventListener('click', (e) => e.stopPropagation());
-        dot.addEventListener('change', (e) => {
-            e.stopPropagation();
-            this.setElementDotted(element, dot.checked);
-        });
+        anchor.querySelectorAll('.dot-choice').forEach(choice => {             choice.addEventListener('click', (e) => {                 e.stopPropagation();                 const count = Number(choice.dataset.dots);                 const current = Playback.dotCount(element.dotted);                 this.setElementDotted(element, current === count ? 0 : count);             });         });
     }
     
     toggleDurationMenu(menu, anchor) {
@@ -1009,14 +996,7 @@ class FullRangeStaffManager {
             option.classList.toggle('active', value === element.duration);
         });
         
-        const dot = anchor.querySelector('.dot-toggle');
-        if (dot) {
-            dot.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.setElementDotted(element, (Playback.dotCount(element.dotted) + 1) % 4);
-            });
-        }
-        if (dot) dot.checked = !!element.dotted;
+        const dotChoices = anchor.querySelectorAll('.dot-choice');         const currentDots = Playback.dotCount(element.dotted);         dotChoices.forEach(node => {             node.classList.toggle('active', Number(node.dataset.dots) === currentDots);         });
     }
     
     // Вставка элемента в мелодию и полный пересчёт раскладки
@@ -1347,31 +1327,26 @@ class FullRangeStaffManager {
     changeSelectedDuration(direction) {
         const element = this.selectedElement();
         if (!element) return false;
-        
-        const index = DURATION_LADDER.findIndex(step =>
-            step.duration === element.duration && step.dotted === Playback.dotCount(element.dotted));
+
+        // Из файла длительность может прийти строкой, поэтому приводим к числу
+        const index = DURATION_LADDER.indexOf(Number(element.duration));
         if (index === -1) return false;
-        
+
         // direction 1 - длиннее, а лесенка начинается с самой длинной
         const next = index - direction;
         if (next < 0 || next >= DURATION_LADDER.length) {
             this.updateStatus(t('status.durationLimit'));
             return false;
         }
-        
-        const step = DURATION_LADDER[next];
-        // Запоминаем один раз на всё действие, а не отдельно на длительность и точку
+
+        const duration = DURATION_LADDER[next];
         this.pushHistory();
-        this.setElementDuration(element, step.duration, { history: false });
-        if (Playback.dotCount(element.dotted) !== step.dotted) {
-            this.setElementDotted(element, step.dotted, { history: false });
-        }
-        
-        // setElementDuration пишет в строку состояния только про длительность,
-        // поэтому говорим ещё раз - уже с учётом точки
-        this.updateStatus(t(step.dotted ? 'status.durationSetDotted' : 'status.durationSet',
-            { name: this.durationLabel(step.duration) }));
-        
+        this.setElementDuration(element, duration, { history: false });
+
+        // Точки остаются как были: их ставят отдельно, кнопками в окошке
+        this.updateStatus(t(element.dotted ? 'status.durationSetDotted' : 'status.durationSet',
+            { name: this.durationLabel(duration) }));
+
         return true;
     }
     
