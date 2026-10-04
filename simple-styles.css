@@ -12,7 +12,11 @@ body {
 
 .app-container {
     width: 100%; /* Занимаем всю доступную ширину */
-    height: 100vh;
+    height: 100vh; /* запасной вариант для старых браузеров */
+    /* На телефоне и планшете адресная строка съедает часть экрана:
+       при 100vh низ уходил под неё и был недостижим. dvh - это
+       именно видимая высота окна */
+    height: 100dvh;
     margin: 0; /* Убираем маржины */
     background: white;
     display: flex;
@@ -866,6 +870,26 @@ body {
 
 /* Короткий экран: поджимаем всё, кроме стана, чтобы строке досталось больше места */
 @media (max-height: 760px) {
+    /* Кроме полос над станом поджимаем и панель: на планшете её содержимое
+       не помещается, и до нижних настроек приходилось долго крутить */
+    .control-panel {
+        padding: 6px;
+    }
+
+    .control-panel .control-group,
+    .control-panel .setting-group {
+        gap: 5px;
+        margin-bottom: 6px;
+    }
+
+    .control-panel .control-subtitle {
+        margin: 8px 0 4px;
+    }
+
+    .control-panel .btn-control {
+        padding: 5px 8px;
+    }
+
     .app-header {
         padding: 4px 12px;
     }
