@@ -49,36 +49,23 @@
             <!-- Панель управления слева. Пояснения к разделам - в подсказках при наведении. -->
             <aside class="control-panel">
                 <div class="control-section">
-                    <h3 data-i18n-title="panel.notes.hint">
-                        <i class="fas fa-sliders-h"></i> <span data-i18n="panel.notes">Управление нотами</span>
+                    <h3 data-i18n-title="panel.save.hint">
+                        <i class="fas fa-save"></i> <span data-i18n="panel.save">Сохранение</span>
                     </h3>
                     <div class="control-group">
-                        <button id="btn-note-up" class="btn-control" disabled data-i18n-title="btn.noteUp.hint">
-                            <i class="fas fa-arrow-up"></i> <span data-i18n="btn.noteUp">Поднять ноту</span>
+                        <button id="btn-save" class="btn-control btn-success" disabled data-i18n-title="btn.save.hint">
+                            <i class="fas fa-download"></i> <span data-i18n="btn.save">Сохранить</span>
                         </button>
-                        <button id="btn-note-down" class="btn-control" disabled data-i18n-title="btn.noteDown.hint">
-                            <i class="fas fa-arrow-down"></i> <span data-i18n="btn.noteDown">Опустить ноту</span>
+                        <button id="btn-load" class="btn-control" data-i18n-title="btn.load.hint">
+                            <i class="fas fa-upload"></i> <span data-i18n="btn.load">Загрузить</span>
                         </button>
-                    </div>
-                    <div class="control-group">
-                        <button id="btn-delete-note" class="btn-control btn-danger" disabled data-i18n-title="btn.delete.hint">
-                            <i class="fas fa-times"></i> <span data-i18n="btn.delete">Удалить ноту</span>
-                        </button>
-                        <button id="btn-clear" class="btn-control btn-danger" data-i18n-title="btn.clear.hint">
-                            <i class="fas fa-trash"></i> <span data-i18n="btn.clear">Очистить все</span>
+                        <button id="btn-midi-save" class="btn-control" disabled data-i18n-title="btn.midiSave.hint"><i class="fas fa-file-export"></i> <span data-i18n="btn.midiSave">Сохранить MIDI</span></button>
+                        <button id="btn-midi" class="btn-control" data-i18n-title="btn.midi.hint">
+                            <i class="fas fa-music"></i> <span data-i18n="btn.midi">Загрузить MIDI</span>
                         </button>
                     </div>
-                </div>
-
-                <div class="control-section">
-                    <h3 data-i18n-title="panel.rests.hint">
-                        <i class="fas fa-pause-circle"></i> <span data-i18n="panel.rests">Паузы</span>
-                    </h3>
-                    <div class="control-group">
-                        <button id="btn-add-rest" class="btn-control" data-i18n-title="btn.addRest.hint">
-                            <i class="fas fa-plus"></i> <span data-i18n="btn.addRest">Добавить паузу</span>
-                        </button>
-                    </div>
+                    <input type="file" id="file-input" accept=".json" style="display: none;">
+                    <input type="file" id="midi-input" accept=".mid,.midi,audio/midi,audio/x-midi" style="display: none;">
                 </div>
 
                 <div class="control-section">
@@ -105,9 +92,61 @@
                 </div>
 
                 <div class="control-section">
-                    <h3 data-i18n-title="panel.measures.hint">
-                        <i class="fas fa-grip-lines-vertical"></i> <span data-i18n="panel.measures">Размер и такты</span>
+                    <h3 data-i18n-title="panel.edit.hint">
+                        <i class="fas fa-pen"></i> <span data-i18n="panel.edit">Редактирование</span>
                     </h3>
+                <div class="control-subsection">
+                    <h4 class="control-subtitle" data-i18n-title="panel.notes.hint">
+                        <i class="fas fa-sliders-h"></i> <span data-i18n="panel.notes">Управление нотами</span>
+                    </h4>
+                    <div class="control-group">
+                        <button id="btn-note-up" class="btn-control" disabled data-i18n-title="btn.noteUp.hint">
+                            <i class="fas fa-arrow-up"></i> <span data-i18n="btn.noteUp">Поднять ноту</span>
+                        </button>
+                        <button id="btn-note-down" class="btn-control" disabled data-i18n-title="btn.noteDown.hint">
+                            <i class="fas fa-arrow-down"></i> <span data-i18n="btn.noteDown">Опустить ноту</span>
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="btn-delete-note" class="btn-control btn-danger" disabled data-i18n-title="btn.delete.hint">
+                            <i class="fas fa-times"></i> <span data-i18n="btn.delete">Удалить ноту</span>
+                        </button>
+                        <button id="btn-clear" class="btn-control btn-danger" data-i18n-title="btn.clear.hint">
+                            <i class="fas fa-trash"></i> <span data-i18n="btn.clear">Очистить все</span>
+                        </button>
+                    </div>
+                </div>
+
+
+                <div class="control-subsection">
+                    <h4 class="control-subtitle" data-i18n-title="panel.rests.hint">
+                        <i class="fas fa-pause-circle"></i> <span data-i18n="panel.rests">Паузы</span>
+                    </h4>
+                    <div class="control-group">
+                        <button id="btn-add-rest" class="btn-control" data-i18n-title="btn.addRest.hint">
+                            <i class="fas fa-plus"></i> <span data-i18n="btn.addRest">Добавить паузу</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-subsection">
+                    <h4 class="control-subtitle" data-i18n-title="panel.repeat.hint">
+                        <i class="fas fa-redo"></i> <span data-i18n="panel.repeat">Реприза</span>
+                    </h4>
+                    <div class="control-group">
+                        <button id="btn-repeat-start" class="btn-control" disabled data-i18n-title="btn.repeatStart.hint">
+                            <i class="fas fa-step-backward"></i> <span data-i18n="btn.repeatStart">Начать репризу</span>
+                        </button>
+                        <button id="btn-repeat-end" class="btn-control" disabled data-i18n-title="btn.repeatEnd.hint">
+                            <i class="fas fa-step-forward"></i> <span data-i18n="btn.repeatEnd">Закончить репризу</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-subsection">
+                    <h4 class="control-subtitle" data-i18n-title="panel.measures.hint">
+                        <i class="fas fa-grip-lines-vertical"></i> <span data-i18n="panel.measures">Размер и такты</span>
+                    </h4>
                     <div class="setting-group">
                         <label for="time-signature" data-i18n="setting.signature">Размер такта:</label>
                         <select id="time-signature" class="select-input" data-i18n-title="setting.signature.hint">
@@ -140,38 +179,17 @@
                     </div>
                 </div>
 
-                <div class="control-section">
-                    <h3 data-i18n-title="panel.repeat.hint">
-                        <i class="fas fa-redo"></i> <span data-i18n="panel.repeat">Реприза</span>
-                    </h3>
+                    <h4 class="control-subtitle" data-i18n-title="panel.transpose.hint">
+                        <i class="fas fa-exchange-alt"></i> <span data-i18n="panel.transpose">Транспонирование</span>
+                    </h4>
                     <div class="control-group">
-                        <button id="btn-repeat-start" class="btn-control" disabled data-i18n-title="btn.repeatStart.hint">
-                            <i class="fas fa-step-backward"></i> <span data-i18n="btn.repeatStart">Начать репризу</span>
+                        <button id="btn-transpose-up" class="btn-control" data-i18n-title="btn.transposeUp.hint">
+                            <i class="fas fa-arrow-up"></i> <span data-i18n="btn.transposeUp">Все вверх</span>
                         </button>
-                        <button id="btn-repeat-end" class="btn-control" disabled data-i18n-title="btn.repeatEnd.hint">
-                            <i class="fas fa-step-forward"></i> <span data-i18n="btn.repeatEnd">Закончить репризу</span>
+                        <button id="btn-transpose-down" class="btn-control" data-i18n-title="btn.transposeDown.hint">
+                            <i class="fas fa-arrow-down"></i> <span data-i18n="btn.transposeDown">Все вниз</span>
                         </button>
                     </div>
-                </div>
-
-                <div class="control-section">
-                    <h3 data-i18n-title="panel.save.hint">
-                        <i class="fas fa-save"></i> <span data-i18n="panel.save">Сохранение</span>
-                    </h3>
-                    <div class="control-group">
-                        <button id="btn-save" class="btn-control btn-success" disabled data-i18n-title="btn.save.hint">
-                            <i class="fas fa-download"></i> <span data-i18n="btn.save">Сохранить</span>
-                        </button>
-                        <button id="btn-load" class="btn-control" data-i18n-title="btn.load.hint">
-                            <i class="fas fa-upload"></i> <span data-i18n="btn.load">Загрузить</span>
-                        </button>
-                        <button id="btn-midi-save" class="btn-control" disabled data-i18n-title="btn.midiSave.hint"><i class="fas fa-file-export"></i> <span data-i18n="btn.midiSave">Сохранить MIDI</span></button>
-                        <button id="btn-midi" class="btn-control" data-i18n-title="btn.midi.hint">
-                            <i class="fas fa-music"></i> <span data-i18n="btn.midi">Загрузить MIDI</span>
-                        </button>
-                    </div>
-                    <input type="file" id="file-input" accept=".json" style="display: none;">
-                    <input type="file" id="midi-input" accept=".mid,.midi,audio/midi,audio/x-midi" style="display: none;">
                 </div>
 
                 <div class="control-section">
@@ -218,21 +236,14 @@
                         </div>
                     </div>
                 </div>
+
             </aside>
 
             <!-- Центральная область с нотным станом -->
             <section class="staff-area">
                 <div class="staff-container">
                     <div class="staff-header">
-                        <div class="control-group staff-header-buttons">
-                            <button id="btn-transpose-up" class="btn-control" data-i18n-title="btn.transposeUp.hint">
-                                <i class="fas fa-arrow-up"></i> <span data-i18n="btn.transposeUp">Все вверх</span>
-                            </button>
-                            <button id="btn-transpose-down" class="btn-control" data-i18n-title="btn.transposeDown.hint">
-                                <i class="fas fa-arrow-down"></i> <span data-i18n="btn.transposeDown">Все вниз</span>
-                            </button>
-                        </div>
-                        <div class="control-group staff-header-center"><button id="btn-undo" class="btn-control" disabled data-i18n-title="btn.undo.hint"><i class="fas fa-undo"></i> <span data-i18n="btn.undo">Отменить</span></button><button id="btn-redo" class="btn-control" disabled data-i18n-title="btn.redo.hint"><i class="fas fa-redo"></i> <span data-i18n="btn.redo">Вернуть</span></button></div>
+                        <div class="control-group staff-header-history"><button id="btn-undo" class="btn-control" disabled data-i18n-title="btn.undo.hint"><i class="fas fa-undo"></i> <span data-i18n="btn.undo">Отменить</span></button><button id="btn-redo" class="btn-control" disabled data-i18n-title="btn.redo.hint"><i class="fas fa-redo"></i> <span data-i18n="btn.redo">Вернуть</span></button></div>
                         <div class="staff-info">
                             <span id="measure-info"></span>
                             <span class="staff-info-optional" data-i18n="staff.positions">Позиций: 27</span>
@@ -255,7 +266,7 @@
             <div class="status-bar">
                 <span id="status-message" data-i18n="status.ready">Готов к работе. Кликните на маркер позиции, чтобы добавить ноту.</span>
                 <span id="cache-status" class="cache-status"></span>
-                <span class="app-version">v1.8.21</span>
+                <span class="app-version">v1.8.22</span>
             </div>
         </footer>
     </div>

@@ -1078,6 +1078,9 @@ class FullRangeStaffManager {
     }
     
     deselectNote() {
+        // Снимаем выделение - убираем и окошко длительности: на планшете
+        // оно оставалось открытым после повторного нажатия по ноте
+        this.closeDurationMenus();
         if (this.selectedNoteId) {
             const note = this.notes.find(n => n.id === this.selectedNoteId);
             if (note) {
@@ -1285,9 +1288,16 @@ class FullRangeStaffManager {
         to.push(this.historySnapshot());
         if (to.length > HISTORY_LIMIT) to.shift();
         
+        // Запоминаем прокрутку: мелодия перестраивается целиком, и без этого
+        // после отката нас возвращало бы к началу стана
+        const scrollArea = document.querySelector('.scrollable-area');
+        const scrollTop = scrollArea ? scrollArea.scrollTop : 0;
+        
         this.restoring = true;
         this.applyMelody(from.pop());
         this.restoring = false;
+        
+        if (scrollArea) scrollArea.scrollTop = scrollTop;
         
         this.updateHistoryButtons();
         this.updateStatus(t(doneKey));

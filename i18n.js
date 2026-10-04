@@ -103,6 +103,10 @@
             'midi.shifted': ' · мелодия перенесена на {semitones} полутонов, чтобы попасть в диапазон саксофона',
             'midi.skipped': ' · {n} нот вне диапазона пропущено',
 
+            'panel.edit': 'Редактирование',
+            'panel.edit.hint': 'Правка мелодии: ноты, паузы, реприза, размер и транспонирование',
+            'panel.transpose': 'Транспонирование',
+            'panel.transpose.hint': 'Поднять или опустить всю мелодию на полтона',
             'panel.settings': 'Настройки',
             'panel.settings.hint': 'Размер картинок аппликатур, показ названий нот и аппликатур, режим альтераций',
             'setting.imageSize': 'Размер картинок:',
@@ -339,6 +343,10 @@
             'midi.shifted': ' · the melody was shifted by {semitones} semitones to fit the saxophone range',
             'midi.skipped': ' · {n} notes outside the range were skipped',
 
+            'panel.edit': 'Editing',
+            'panel.edit.hint': 'Edit the melody: notes, rests, repeats, metre and transposition',
+            'panel.transpose': 'Transposition',
+            'panel.transpose.hint': 'Raise or lower the whole melody by a semitone',
             'panel.settings': 'Settings',
             'panel.settings.hint': 'Fingering image size, note names and fingerings visibility, accidental mode',
             'setting.imageSize': 'Image size:',

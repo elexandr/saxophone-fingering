@@ -403,11 +403,11 @@ body {
     flex-shrink: 0;
 }
 
-.staff-header-center {
-    /* Откат и возврат стоят справа, вплотную к сводке. По центру полосы они
-       отжимали сводку, и она собиралась гармошкой.
+.staff-header-history {
+    /* Откат и возврат стоят слева полосы над станом.
        Раскладку задаём строкой: в боковой панели группы идут столбиком */
-    margin: 0 0 0 auto;
+       Раскладку задаём строкой: в боковой панели группы идут столбиком */
+    margin: 0;
     flex-direction: row;
     align-items: center;
     gap: 8px;
@@ -1190,4 +1190,20 @@ body {
 
 .modal-body p:last-child {
     margin-bottom: 0;
+}
+/* Подраздел внутри раздела «Редактирование»: без своей рамки, только подпись */
+.control-subsection {
+    padding: 0;
+    border: 0;
+    margin: 0;
+}
+
+.control-subtitle {
+    margin: 14px 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4a5568;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
