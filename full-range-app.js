@@ -2767,6 +2767,16 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Именно строка целиком: в неё входят и стан, и ряд аппликатур.
         // Если взять обёртку стана, аппликатуры остаются за краем области.
         const system = staff ? staff.closest('.system') : null;
+
+        // Картинки следующей строки декодируем заранее: иначе первый кадр
+        // после перехода тратится на их декодирование, и подсветка замирает
+        const nextStaff = this.staffContainers[systemIndex + 1];
+        const nextSystem = nextStaff ? nextStaff.closest('.system') : null;
+        if (nextSystem) {
+            nextSystem.querySelectorAll('img').forEach(img => {
+                if (img.decode) img.decode().catch(() => {});
+            });
+        }
         if (!system) return;
         
         const areaRect = area.getBoundingClientRect();
