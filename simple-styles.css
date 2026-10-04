@@ -1248,3 +1248,13 @@ body {
     background: #667eea;
     color: #ffffff;
 }
+
+/* Номер такта: маленькая серая цифра над верхней линейкой */
+.measure-number {
+    position: absolute;
+    color: #a0aec0;
+    font-size: 11px;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+}

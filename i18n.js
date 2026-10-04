@@ -129,7 +129,6 @@
 
             'staff.measures': 'Размер: {signature} · Тактов: {n}',
             'staff.metre': 'Размер: {signature}',
-            'staff.positions': 'Позиций: 27',
             'staff.fingerings': 'Аппликатур: {n}',
             'staff.noSelection': 'Нет выделенной ноты',
             'staff.staffTitle': 'Кликните на маркер позиции, чтобы добавить ноту. Клик по ноте выделяет её и озвучивает. Стрелки влево и вправо переключают ноты, Shift со стрелкой вверх или вниз меняет высоту. Insert вставляет ноту перед выделенной, Shift+Insert — паузу',
@@ -376,7 +375,6 @@
 
             'staff.measures': 'Metre: {signature} · bars: {n}',
             'staff.metre': 'Metre: {signature}',
-            'staff.positions': 'Positions: 27',
             'staff.fingerings': 'Fingerings: {n}',
             'staff.noSelection': 'No note selected',
             'staff.staffTitle': 'Click a position marker to add a note. Clicking a note selects and sounds it. Left and right arrows move between notes, Shift with up or down changes the pitch. Insert adds a note before the selected one, Shift+Insert adds a rest',

@@ -2276,9 +2276,44 @@ class FullRangeStaffManager {
             }
         });
         
+        this.renderMeasureNumbers(marks);
         this.updateMeasureInfo();
     }
     
+    // Номера тактов: маленькая серая цифра над верхней линейкой в начале такта.
+    // Номер сквозной по всей мелодии, как в нотах.
+    renderMeasureNumbers(marks) {
+        const slot = this.imageSize + 2;
+        let number = 0;
+
+        this.notes.forEach((element, index) => {
+            const previous = index > 0 ? this.notes[index - 1] : null;
+            const firstInSystem = !previous || previous.system !== element.system;
+
+            // Такт начинается с первой ноты строки или там, где разметка
+            // поставила черту после предыдущей ноты
+            const previousMark = previous ? marks.get(previous.id) : null;
+            const afterBarLine = previousMark === 'barline' || previousMark === 'repeat-end' ||
+                (previous && (previous.hasBarLine || previous.repeatEnd));
+
+            if (!firstInSystem && !afterBarLine) return;
+
+            number++;
+
+            const staff = this.staffContainers[element.system];
+            if (!staff) return;
+
+            const label = document.createElement('span');
+            label.className = 'measure-number fade-in';
+            label.textContent = number;
+            label.style.left = Math.round(element.x - slot / 2) + 'px';
+            label.style.top = (STAFF_TOP_LEDGER - 20) + 'px';
+
+            staff.appendChild(label);
+            this.notationMarks.push(label);
+        });
+    }
+
     createBarLine(element, x) {
         const barLine = document.createElement('div');
         barLine.className = 'bar-line fade-in';
