@@ -2307,7 +2307,9 @@ class FullRangeStaffManager {
             label.className = 'measure-number fade-in';
             label.textContent = number;
             label.style.left = Math.round(element.x - slot / 2) + 'px';
-            label.style.top = (STAFF_TOP_LEDGER - 20) + 'px';
+            // Прямо над верхней толстой линейкой: между ней и ближней
+            // добавочной линейкой, а не над всем станом
+            label.style.top = (STAFF_MAIN_TOP - 14) + 'px';
 
             staff.appendChild(label);
             this.notationMarks.push(label);

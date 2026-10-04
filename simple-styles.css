@@ -1253,6 +1253,9 @@ body {
 .measure-number {
     position: absolute;
     color: #a0aec0;
+    background: #ffffff;
+    padding: 0 2px;
+    border-radius: 2px;
     font-size: 11px;
     line-height: 1;
     pointer-events: none;
