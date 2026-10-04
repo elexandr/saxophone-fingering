@@ -2631,6 +2631,34 @@ class FullRangeStaffManager {
     // Прокручивает область стана к строке, которая звучит, плавным движением.
     // Если это последняя нота строки, заранее показываем следующую:
     // переключение происходит, пока нота ещё звучит.
+    // Вспышка на строке, к которой перешла игра. Плавная прокрутка на планшете
+    // может отстать, и тогда непонятно, сменилась строка или нет. Анимируется
+    // только прозрачность, поэтому кадры на вспышку не тратятся.
+    flashSystem(system, area) {
+        const staff = system ? system.querySelector('.staff') : null;
+        if (!staff || !area) return;
+
+        let flash = this.lineFlash;
+        if (!flash) {
+            flash = document.createElement('div');
+            flash.className = 'line-flash';
+            this.lineFlash = flash;
+        }
+
+        const staffRect = staff.getBoundingClientRect();
+        const areaRect = area.getBoundingClientRect();
+        flash.style.top = Math.round(staffRect.top - areaRect.top + area.scrollTop) + 'px';
+        flash.style.height = Math.round(staffRect.height) + 'px';
+
+        if (flash.parentElement !== area) area.appendChild(flash);
+
+        flash.classList.remove('on');
+        void flash.offsetWidth; // перезапуск перехода
+        flash.classList.add('on');
+
+        clearTimeout(this.flashTimer);
+        this.flashTimer = setTimeout(() => flash.classList.remove('on'), 60);
+    }
     followPlayback(element, options = {}) {
         if (!element) return;
         
@@ -2669,6 +2697,8 @@ class FullRangeStaffManager {
         const limit = Math.max(0, area.scrollHeight - area.clientHeight);
         const target = Math.max(0, Math.min(top - PLAYBACK_SCROLL_MARGIN, limit));
         
+        if (!options.instant) this.flashSystem(system, area);
+
         this.scrollAreaTo(area, target, !!options.instant);
     }
     
@@ -3353,7 +3383,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const started = staffManager.melodyPlayer.play(sequence, staffManager.tempo, {
                 onElement: (index, element) => {
                     staffManager.highlightElement(element);
-                    staffManager.followPlayback(element, { instant: true });
+                    staffManager.followPlayback(element);
                 },
                 onEnd: () => {
                     // По кругу - пауза, за неё стан поднимается на первую строку,

@@ -372,6 +372,7 @@ body {
 /* Область со скроллом. Запасной скролл остаётся для такта,
    который не влезает в строку целиком. */
 .scrollable-area {
+    position: relative; /* система отсчёта для вспышки строки */
     overflow: auto;
     width: 100%;
     flex: 1;
@@ -1290,4 +1291,23 @@ body {
 .system {
     content-visibility: auto;
     contain-intrinsic-size: auto 520px;
+}
+
+/* Вспышка на строке, к которой перешла игра. Смену строки видно сразу,
+   даже если плавная прокрутка где-то отстала. Анимируется только прозрачность,
+   поэтому кадры на неё не тратятся. */
+.line-flash {
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    background: rgba(102, 126, 234, 0.10);
+    opacity: 0;
+    transition: opacity 0.45s ease-out;
+    z-index: 5;
+}
+
+.line-flash.on {
+    opacity: 1;
+    transition: none;
 }
