@@ -146,12 +146,20 @@
         return typeof window !== 'undefined' && !!(window.AudioContext || window.webkitAudioContext);
     }
 
+    // Кадр отрисовки: в браузере requestAnimationFrame, в Node - таймер
+    function requestFrame(callback) {
+        if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback);
+        return setTimeout(callback, 16);
+    }
+
     function MelodyPlayer() {
         this.ctx = null;
         this.master = null;
         this.voices = [];
         this.timers = [];
         this.playing = false;
+    this.frame = null;
+    this.timeline = [];
     }
 
     MelodyPlayer.prototype.ensureContext = function () {
@@ -243,6 +251,10 @@
 
         this.playing = true;
 
+        // Расписание: что когда звучит. Подсветку ведём по тем же временам,
+        // но по звуковым часам, а не по setTimeout
+        var timeline = [];
+
         list.forEach(function (element, index) {
             var durationSec = secondsFor(element, tempo);
             var startAt = cursor;
@@ -254,22 +266,50 @@
                 }
             }
 
-            self.timers.push(setTimeout(function () {
-                if (handlers.onElement) handlers.onElement(index, element);
-            }, Math.max(0, (startAt - ctx.currentTime) * 1000)));
-
+            timeline.push({ index: index, element: element, startAt: startAt });
             cursor += durationSec;
         });
 
-        this.timers.push(setTimeout(function () {
-            self.playing = false;
-            if (handlers.onEnd) handlers.onEnd();
-        }, Math.max(0, (cursor - ctx.currentTime) * 1000 + tailMs)));
+        this.timeline = timeline;
+        this.timelineIndex = 0;
+        this.endsAt = cursor + tailMs / 1000;
+
+        // Смотрим на звуковые часы в каждом кадре: тогда подсветка отстаёт от
+        // звука не больше чем на кадр, и её не сдвигает работа главного потока
+        var tick = function () {
+            if (!self.playing) return;
+
+            var now = self.ctx ? self.ctx.currentTime : 0;
+
+            while (self.timelineIndex < timeline.length &&
+                   timeline[self.timelineIndex].startAt <= now) {
+                var step = timeline[self.timelineIndex];
+                self.timelineIndex++;
+                if (handlers.onElement) handlers.onElement(step.index, step.element);
+            }
+
+            if (now >= self.endsAt) {
+                self.playing = false;
+                self.frame = null;
+                if (handlers.onEnd) handlers.onEnd();
+                return;
+            }
+
+            self.frame = requestFrame(tick);
+        };
+
+        this.frame = requestFrame(tick);
 
         return true;
     };
 
     MelodyPlayer.prototype.stop = function () {
+        // Кадр подсветки тоже снимаем: иначе он продолжит тикать
+        if (this.frame !== null && this.frame !== undefined) {
+            if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.frame);
+            clearTimeout(this.frame);
+            this.frame = null;
+        }
         this.timers.forEach(function (id) { clearTimeout(id); });
         this.timers = [];
 

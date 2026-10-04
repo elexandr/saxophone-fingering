@@ -2627,7 +2627,7 @@ class FullRangeStaffManager {
     // Прокручивает область стана к строке, которая звучит, плавным движением.
     // Если это последняя нота строки, заранее показываем следующую:
     // переключение происходит, пока нота ещё звучит.
-    followPlayback(element) {
+    followPlayback(element, options = {}) {
         if (!element) return;
         
         const area = document.querySelector('.scrollable-area');
@@ -2657,15 +2657,16 @@ class FullRangeStaffManager {
         const limit = Math.max(0, area.scrollHeight - area.clientHeight);
         const target = Math.max(0, Math.min(top - PLAYBACK_SCROLL_MARGIN, limit));
         
-        this.scrollAreaTo(area, target);
+        this.scrollAreaTo(area, target, !!options.instant);
     }
     
     // Плавная прокрутка области. При отключённой анимации в системе - сразу.
-    scrollAreaTo(area, top) {
+    scrollAreaTo(area, top, instant) {
         const reduce = window.matchMedia &&
             window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         
-        if (reduce || typeof area.scrollTo !== 'function') {
+        // Мгновенный переход нужен перед запуском: плавный не успеет к первой ноте
+        if (instant || reduce || typeof area.scrollTo !== 'function') {
             area.scrollTop = top;
             return;
         }
@@ -2674,15 +2675,29 @@ class FullRangeStaffManager {
     }
     
     // Подсветка элемента, который звучит сейчас: знак на стане и карточка аппликатуры
-    highlightElement(element) {        document.querySelectorAll('.note-anchor.playing').forEach(node => node.classList.remove('playing'));
-        document.querySelectorAll('.fingering-card.playing').forEach(node => node.classList.remove('playing'));
+    // Подсветка звучащего элемента. Снимаем класс только с прошлого: обход
+    // всего стана на каждую ноту заметно тормозил подсветку
+    highlightElement(element) {        const previousNote = this.playingNote;
+        const previousCard = this.playingCard;
+
+        if (previousNote && previousNote.element) previousNote.element.classList.remove('playing');
+        if (previousCard) previousCard.classList.remove('playing');
+
+        this.playingNote = null;
+        this.playingCard = null;
         
         if (!element) return;
         
-        if (element.element) element.element.classList.add('playing');
+        if (element.element) {
+            element.element.classList.add('playing');
+            this.playingNote = element;
+        }
         
         const card = document.querySelector('.fingering-card[data-note-id="' + element.id + '"]');
-        if (card) card.classList.add('playing');
+        if (card) {
+            card.classList.add('playing');
+            this.playingCard = card;
+        }
     }
     
     // Переключение диезов и бемолей переписывает уже добавленные ноты
@@ -3301,6 +3316,10 @@ document.addEventListener('DOMContentLoaded', () => {
         function start(isRepeat) {
             // Своё озвучивание отдельных нот гасим: иначе оно наложится
             staffManager.stopNotePreview();
+
+            // Экран переводим на строку начала до включения звука: смещение
+            // мгновенное, а на отрисовку кадра есть запас leadIn в плеере
+            staffManager.followPlayback(sequence[0], { instant: true });
             
             const started = staffManager.melodyPlayer.play(sequence, staffManager.tempo, {
                 onElement: (index, element) => {
