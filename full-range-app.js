@@ -2211,8 +2211,21 @@ class FullRangeStaffManager {
             });
             
             const complete = Math.floor((total + 1e-6) / measure);
-            const hasTail = total - complete * measure > 1e-6;
-            this.measureCount = total > 0 ? complete + (hasTail ? 1 : 0) : 0;
+            const tailStart = complete * measure;
+            const hasTail = total - tailStart > 1e-6;
+
+            // Пустой такт в конце не считаем: если последняя нота просто
+            // тянется через границу, нот в последнем такте нет
+            let tailHasNote = false;
+            if (hasTail) {
+                let start = 0;
+                this.notes.forEach(element => {
+                    if (start >= tailStart - 1e-6) tailHasNote = true;
+                    start += this.elementBeats(element);
+                });
+            }
+
+            this.measureCount = total > 0 ? complete + (hasTail && tailHasNote ? 1 : 0) : 0;
         } else {
             this.notes.forEach(element => {
                 element.crossesBoundary = false;
@@ -2303,17 +2316,20 @@ class FullRangeStaffManager {
 
             while (nextNumber <= end - 1e-6 && staff) {
                 if (nextNumber >= start - 1e-6) {
-                    number++;
+                    // Номер ставим только в начале такта, где начинается нота.
+                    // Над нотой, которая тянется через границу, номера не пишем
+                    const atStart = Math.abs(nextNumber - start) < 1e-6;
+                    const barNumber = ++number;
 
-                    // Если граница внутри ноты, сдвигаем цифру к самой границе
-                    const share = beats > 0
-                        ? Math.max(0, Math.min(1, (nextNumber - start) / beats))
-                        : 0;
+                    if (!atStart) {
+                        nextNumber += measure;
+                        continue;
+                    }
 
                     const label = document.createElement('span');
                     label.className = 'measure-number fade-in';
-                    label.textContent = number;
-                    label.style.left = Math.round(element.x - slot / 2 + slot * share) + 'px';
+                    label.textContent = barNumber;
+                    label.style.left = Math.round(element.x - slot / 2) + 'px';
                     label.style.top = (STAFF_MAIN_TOP - 14) + 'px';
 
                     staff.appendChild(label);
