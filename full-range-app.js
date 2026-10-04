@@ -3335,9 +3335,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Паузы
     document.getElementById('btn-add-rest').addEventListener('click', () => {
-        const index = staffManager.selectedIndex();
-        staffManager.addRest(index === -1 ? null : index + 1);
-    });
+        // Если нота выделена, пауза встаёт перед ней: так удобнее
+        // набирать. Без выделения - в конец мелодии
+        staffManager.insertRestBefore();
+        });
     
     // Темп и воспроизведение
     document.getElementById('tempo-input').addEventListener('change', (e) => {

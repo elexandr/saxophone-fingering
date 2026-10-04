@@ -52,7 +52,7 @@
             'btn.redo': 'Вернуть',
             'btn.undo.hint': 'Откатить последнее действие (Ctrl+Z)',
             'btn.redo.hint': 'Вернуть отменённое действие (Ctrl+Y)',
-            'btn.addRest.hint': 'Вставить паузу после выделенного элемента (Shift+Insert — перед выделенным)',
+            'btn.addRest.hint': 'Вставить паузу перед выделенной нотой, а если ничего не выделено — в конец мелодии (Shift+Insert)',
 
             'panel.play': 'Воспроизведение',
             'panel.play.hint': 'Мелодия играется с начала с учётом длительностей, точек, пауз и репризы. Звук синтезирует сам браузер, интернет не нужен',
@@ -298,7 +298,7 @@
             'btn.redo': 'Redo',
             'btn.undo.hint': 'Undo the last action (Ctrl+Z)',
             'btn.redo.hint': 'Redo the undone action (Ctrl+Y)',
-            'btn.addRest.hint': 'Insert a rest after the selected element (Shift+Insert inserts before)',
+            'btn.addRest.hint': 'Insert a rest before the selected note, or at the end when nothing is selected (Shift+Insert)',
 
             'panel.play': 'Playback',
             'panel.play.hint': 'The melody plays from the start, honouring durations, dots, rests and repeats. The sound is synthesised by the browser, no internet needed',
