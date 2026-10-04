@@ -770,6 +770,12 @@ class FullRangeStaffManager {
         if (!position || !noteInfo) return null;
         
         const noteId = 'note_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+    // Длительность берём у последнего элемента мелодии: четвертная остаётся
+    // только для первой ноты. При вставке в середину длительность задаёт
+    // вызывающий, поэтому там наследование не мешает
+    const previous = this.notes.length ? this.notes[this.notes.length - 1] : null;
+    const inherit = previous && insertIndex === null ? previous : null;
         
         const note = {
             id: noteId,
@@ -784,8 +790,8 @@ class FullRangeStaffManager {
             hasFingering: noteInfo.hasFingering,
             variants: noteInfo.variants || 1,
             currentVariant: 1,
-            duration: 4, // четвертная по умолчанию
-            dotted: false,
+            duration: inherit ? (inherit.duration || 4) : 4,
+            dotted: inherit ? Playback.dotCount(inherit.dotted) : 0,
             stemUp: position.y > STAFF_MIDDLE_LINE_Y,
             x: 0,
             y: position.y,
@@ -814,6 +820,10 @@ class FullRangeStaffManager {
         // Как и у ноты: история только для ручной вставки паузы
         if (!options.silent) this.pushHistory();
         const restId = 'rest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+        // Пауза берёт длительность у последнего элемента - так же, как нота
+        const previousRest = this.notes.length ? this.notes[this.notes.length - 1] : null;
+        const inheritRest = previousRest && insertIndex === null ? previousRest : null;
         
         const rest = {
             id: restId,
@@ -828,8 +838,8 @@ class FullRangeStaffManager {
             hasFingering: false,
             variants: 1,
             currentVariant: 1,
-            duration: 4, // четвертная по умолчанию
-            dotted: false,
+            duration: inheritRest ? (inheritRest.duration || 4) : 4,
+            dotted: inheritRest ? Playback.dotCount(inheritRest.dotted) : 0,
             stemUp: false,
             x: 0,
             y: STAFF_MIDDLE_LINE_Y, // пауза стоит у средней линии
