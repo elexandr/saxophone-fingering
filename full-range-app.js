@@ -1069,6 +1069,8 @@ class FullRangeStaffManager {
         document.getElementById('btn-note-up').disabled = note.isRest;
         document.getElementById('btn-note-down').disabled = note.isRest;
         document.getElementById('btn-delete-note').disabled = false;
+        // Вставить можно перед выделенным, поэтому кнопка живёт вместе с удалением
+        document.getElementById('btn-insert-note').disabled = false;
         
         // Кнопки тактовых черт и репризы зависят от выделения
         this.updateBarLineButtons();
@@ -1098,6 +1100,7 @@ class FullRangeStaffManager {
         document.getElementById('btn-note-up').disabled = true;
         document.getElementById('btn-note-down').disabled = true;
         document.getElementById('btn-delete-note').disabled = true;
+        document.getElementById('btn-insert-note').disabled = true;
         
         // Очищаем аппликатуры
         this.clearFingering();
@@ -3041,6 +3044,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('btn-note-down').addEventListener('click', () => {
         staffManager.changeSelectedNotePitch(-1);
+    });
+    
+    document.getElementById('btn-insert-note').addEventListener('click', () => {
+        staffManager.insertNoteBefore();
+        releaseButtonFocus();
     });
     
     document.getElementById('btn-delete-note').addEventListener('click', () => {
