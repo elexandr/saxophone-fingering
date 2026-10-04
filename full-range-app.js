@@ -732,7 +732,10 @@ class FullRangeStaffManager {
             marker.addEventListener('click', (e) => {
                 e.stopPropagation();
                 // Только последний такт: промах по стану не должен добавлять ноту
-                if (!this.canAddNoteAt(e)) return;
+                if (!this.canAddNoteAt(e)) {
+                this.updateStatus(t('status.addOnlyInLastBar'));
+                return;
+            }
 
                 this.addNote(position.id);
             });
@@ -1310,7 +1313,13 @@ class FullRangeStaffManager {
     // поэтому восстановление идёт обычной загрузкой мелодии.
     historySnapshot() {
         const data = this.serializeMelody();
-        return { elements: data.elements, settings: data.settings };
+        return {
+            elements: data.elements,
+            settings: data.settings,
+            // Место выделенной ноты: при восстановлении идентификаторы новые,
+            // поэтому запоминаем позицию в мелодии, а не идентификатор
+            selectedIndex: this.notes.findIndex(note => note.id === this.selectedNoteId)
+        };
     }
     
     // Запомнить состояние перед изменением. Держим не больше HISTORY_LIMIT
@@ -1348,18 +1357,20 @@ class FullRangeStaffManager {
         // после отката нас возвращало бы к началу стана
         const scrollArea = document.querySelector('.scrollable-area');
         const scrollTop = scrollArea ? scrollArea.scrollTop : 0;
-        // Мелодия пересобирается, и идентификаторы у нот новые: запоминаем
-        // место выделенной ноты, чтобы вернуть выделение на неё же
-        const selectedIndex = this.notes.findIndex(note => note.id === this.selectedNoteId);
         
+        const target = from.pop();
+
         this.restoring = true;
-        this.applyMelody(from.pop());
+        this.applyMelody(target);
         this.restoring = false;
         
         if (scrollArea) scrollArea.scrollTop = scrollTop;
         
-        if (selectedIndex >= 0 && this.notes[selectedIndex]) {
-            this.selectNote(this.notes[selectedIndex].id);
+        // Выделение берём из восстановленного состояния, а не из текущего:
+        // иначе после добавления или вставки выделять было бы нечего
+        const restoreIndex = target.selectedIndex;
+        if (restoreIndex >= 0 && this.notes[restoreIndex]) {
+            this.selectNote(this.notes[restoreIndex].id);
         }
         
         this.updateHistoryButtons();
@@ -1422,6 +1433,9 @@ class FullRangeStaffManager {
         const noteInfo = this.getNoteInfoByName(noteName);
         if (!noteInfo || !noteInfo.positionId) return false;
         
+        // Историю пишем только когда вставка точно состоится
+        this.pushHistory();
+
         const noteId = this.addNote(noteInfo.positionId, noteName, index, { silent: true });
         if (!noteId) return false;
         
