@@ -1311,3 +1311,23 @@ body {
     opacity: 1;
     transition: none;
 }
+
+/* Отсчёт перед началом: крупные полупрозрачные цифры по центру. Мышь не
+   ловят и ничего не перекрывают - только показывают, сколько ждать. */
+.count-in {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26vmin;
+    font-weight: 700;
+    color: rgba(102, 126, 234, 0.35);
+    pointer-events: none;
+    user-select: none;
+    z-index: 100;
+}
+
+.count-in[hidden] {
+    display: none;
+}

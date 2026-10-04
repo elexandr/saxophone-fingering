@@ -176,6 +176,12 @@
         }
         this.master = this.ctx.createGain();
         this.master.gain.value = 0.45;
+
+        // Метроном идёт через свою громкость: его можно приглушить,
+        // не трогая громкость самой мелодии
+        this.metronomeGain = this.ctx.createGain();
+        this.metronomeGain.gain.value = 0.6;
+        this.metronomeGain.connect(this.master);
         this.master.connect(this.ctx.destination);
         return this.ctx;
     };
@@ -246,6 +252,52 @@
         var output = typeof this.ctx.outputLatency === 'number' ? this.ctx.outputLatency : 0;
         return base + output;
     };
+    // Щелчок метронома: короткий тик, у сильной доли выше и громче
+    MelodyPlayer.prototype.scheduleClick = function (startAt, accent) {
+        var ctx = this.ctx;
+        if (!ctx) return;
+
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.value = accent ? 1600 : 1000;
+
+        var peak = accent ? 0.35 : 0.2;
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(peak, startAt + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.05);
+
+        osc.connect(gain);
+        gain.connect(this.metronomeGain || this.master);
+
+        osc.start(startAt);
+        osc.stop(startAt + 0.08);
+        this.voices.push(osc);
+    };
+
+    // Громкость метронома: 0..1
+    MelodyPlayer.prototype.setMetronomeVolume = function (value) {
+        if (this.metronomeGain) {
+            this.metronomeGain.gain.value = Math.max(0, Math.min(1, value));
+        }
+    };
+
+    // Щелчки отсчёта перед началом: последний - как затакт к сильной доле
+    MelodyPlayer.prototype.countInClicks = function (count, secondsEach) {
+        var ctx = this.ensureContext();
+        if (!ctx) return;
+
+        if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+
+        var step = secondsEach > 0 ? secondsEach : 1;
+        var start = ctx.currentTime + 0.05;
+
+        for (var i = 0; i < count; i++) {
+            this.scheduleClick(start + i * step, i === count - 1);
+        }
+    };
+
     MelodyPlayer.prototype.play = function (elements, tempo, handlers, options) {
         handlers = handlers || {};
         options = options || {};
@@ -284,6 +336,18 @@
             timeline.push({ index: index, element: element, startAt: startAt });
             cursor += durationSec;
         });
+
+        // Метроном: щелчок на каждую долю, ударение на сильную
+        if (options.metronome) {
+            var beatSeconds = 60 / (tempo > 0 ? tempo : 80);
+            var beatsPerBar = options.beatsPerBar > 0 ? options.beatsPerBar : 4;
+            var startCursor = ctx.currentTime + leadIn;
+            var totalBeats = Math.round((cursor - startCursor) / beatSeconds);
+
+            for (var beat = 0; beat <= totalBeats; beat++) {
+                self.scheduleClick(startCursor + beat * beatSeconds, beat % beatsPerBar === 0);
+            }
+        }
 
         this.timeline = timeline;
         this.timelineIndex = 0;

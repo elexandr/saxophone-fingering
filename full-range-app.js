@@ -53,7 +53,11 @@ class FullRangeStaffManager {
         this.imageSize = 80; // Ширина 80px, высота 200px
         this.displayMode = 'sharps'; // 'sharps' или 'flats'
         this.tempo = 80; // Темп воспроизведения, ударов в минуту
-        this.loopPlayback = false; // Играть по кругу
+        this.loopPlayback = false;
+        // Метроном и отсчёт перед началом
+        this.metronome = false;
+        this.metronomeVolume = 0.6;
+        this.countIn = false; // Играть по кругу
         this.timeSignature = DEFAULT_TIME_SIGNATURE; // Размер такта
         this.barLineMode = 'auto'; // 'auto' - черты по размеру, 'manual' - вручную
         this.notationMarks = []; // Элементы тактовых черт и знаков репризы
@@ -228,6 +232,38 @@ class FullRangeStaffManager {
             loopCheckbox.addEventListener('change', (e) => {
                 this.setLoopPlayback(e.target.checked);
             });
+
+        
+document.getElementById('metronome-on').addEventListener('change', (e) => {
+        
+    staffManager.metronome = e.target.checked;
+        
+    staffManager.metronomeVolume = parseInt(document.getElementById('metronome-volume').value, 10) / 100;
+        
+    staffManager.melodyPlayer.setMetronomeVolume(staffManager.metronomeVolume);
+        
+    staffManager.scheduleAutosave();
+        
+});
+
+        
+document.getElementById('metronome-volume').addEventListener('input', (e) => {
+        
+    staffManager.metronomeVolume = parseInt(e.target.value, 10) / 100;
+        
+    staffManager.melodyPlayer.setMetronomeVolume(staffManager.metronomeVolume);
+        
+});
+
+        
+document.getElementById('count-in-on').addEventListener('change', (e) => {
+        
+    staffManager.countIn = e.target.checked;
+        
+    staffManager.scheduleAutosave();
+        
+});
+
         }
         
         this.bindLanguageSwitch();
@@ -1252,6 +1288,55 @@ class FullRangeStaffManager {
     // Короткое звучание одной ноты: при постановке, клике и смене высоты,
     // чтобы сразу слышать, что получается. Во время проигрывания молчим,
     // а при массовой загрузке мелодии - тем более: там нот десятки.
+    // Отсчёт перед началом: три секунды с крупными цифрами по центру.
+    // Щелчки идут, только если включён метроном
+    runCountIn(callback) {
+        const overlay = document.getElementById('count-in');
+        const steps = 3;
+
+        // Экран переводим сразу: за время отсчёта видно, откуда пойдёт игра
+        this.followPlayback(this.notes[0], { instant: true });
+
+        if (this.metronome && this.melodyPlayer) {
+            this.melodyPlayer.countInClicks(steps, 1);
+        }
+
+        if (!overlay) {
+            callback();
+            return;
+        }
+
+        let left = steps;
+        overlay.textContent = left;
+        overlay.hidden = false;
+
+        this.countInTimer = setInterval(() => {
+            left -= 1;
+
+            if (left <= 0) {
+                this.clearCountIn();
+                callback();
+                return;
+            }
+
+            overlay.textContent = left;
+        }, 1000);
+    }
+
+    // Снять отсчёт: и таймер, и цифры
+    clearCountIn() {
+        if (this.countInTimer) {
+            clearInterval(this.countInTimer);
+            this.countInTimer = null;
+        }
+
+        const overlay = document.getElementById('count-in');
+        if (overlay) {
+            overlay.hidden = true;
+            overlay.textContent = '';
+        }
+    }
+
     playNotePreview(element) {
         if (!element || element.isRest || this.loading) return false;
         if (!this.melodyPlayer || this.melodyPlayer.playing) return false;
@@ -2838,6 +2923,9 @@ class FullRangeStaffManager {
                 showNoteNames: this.showNoteNames,
                 showFingerings: this.showFingerings,
                 loopPlayback: this.loopPlayback,
+                metronome: this.metronome,
+                metronomeVolume: this.metronomeVolume,
+                countIn: this.countIn,
                 displayMode: this.displayMode,
                 tempo: this.tempo,
                 timeSignature: this.timeSignature,
@@ -2945,6 +3033,9 @@ class FullRangeStaffManager {
                 showNoteNames: this.showNoteNames,
                 showFingerings: this.showFingerings,
                 loopPlayback: this.loopPlayback,
+                metronome: this.metronome,
+                metronomeVolume: this.metronomeVolume,
+                countIn: this.countIn,
                 displayMode: this.displayMode
             }
         });
@@ -3404,7 +3495,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     setPlayingState(false);
                     staffManager.updateStatus(t('status.noAudio'));
                 }
-            }, isRepeat ? { leadIn: LOOP_PAUSE_SECONDS, tailMs: 0 } : undefined);
+            },
+            isRepeat
+                ? { leadIn: LOOP_PAUSE_SECONDS, tailMs: 0, metronome: staffManager.metronome, beatsPerBar: staffManager.measureBeats() }
+                : { metronome: staffManager.metronome, beatsPerBar: staffManager.measureBeats() });
             
             if (!started) return;
             
@@ -3429,7 +3523,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        start();
+        // Включён отсчёт - сначала три секунды с цифрами, потом игра
+        if (staffManager.countIn) {
+            staffManager.runCountIn(() => start());
+        } else {
+            start();
+        }
     }
     
     // Место выделенной ноты в порядке воспроизведения.
@@ -3568,6 +3667,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     function stopMelody() {
+        staffManager.clearCountIn();
         staffManager.melodyPlayer.stop();
         staffManager.highlightElement(null);
         setPlayingState(false);
