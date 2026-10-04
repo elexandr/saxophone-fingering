@@ -560,7 +560,8 @@ class FullRangeStaffManager {
         
         this.imageCache = new FingeringImageCache('fingerings_images/');
         
-        this.imageCache.init()
+        // Готовность кэша держим в поле: по ней удобно дождаться наполнения
+        this.cacheReady = this.imageCache.init()
             .then(() => this.imageCache.sync(this.collectFingeringFiles(), (done, total) => {
                 this.updateCacheStatus(t('status.caching', { done: done, total: total }));
             }))
@@ -2918,19 +2919,35 @@ class FullRangeStaffManager {
     }
     
     // Чтение выбранного MIDI-файла
+    // Чтение MIDI-файла. Возвращает обещание: по нему удобно дождаться
+    // разбора, не подбирая задержку - разбор асинхронный.
     readMidiFile(file) {
-        if (!file) return;
-        
+        if (!file) return Promise.resolve(false);
+
         if (typeof FileReader === 'undefined') {
             this.updateStatus(t('midi.failed', { reason: t('midi.badFile') }));
-            return;
+            return Promise.resolve(false);
         }
-        
-        const reader = new FileReader();
-        
-        reader.onload = () => this.applyMidiBuffer(reader.result);
-        reader.onerror = () => this.updateStatus(t('midi.failed', { reason: t('midi.badFile') }));
-        reader.readAsArrayBuffer(file);
+
+        return new Promise(resolve => {
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                try {
+                    resolve(this.applyMidiBuffer(reader.result));
+                } catch (error) {
+                    this.updateStatus(t('midi.failed', { reason: error.message }));
+                    resolve(false);
+                }
+            };
+
+            reader.onerror = () => {
+                this.updateStatus(t('midi.failed', { reason: t('midi.badFile') }));
+                resolve(false);
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
     }
     
     applySettings(settings) {
