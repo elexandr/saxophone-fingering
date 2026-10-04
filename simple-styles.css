@@ -717,7 +717,25 @@ body {
     transition: opacity 0.12s ease, visibility 0s linear 0.4s;
 }
 
-.note-anchor:hover .duration-panel,
+/* На устройствах с мышью окошко показывается при наведении. На сенсорном
+   экране наведение залипает после касания, и окошко висело даже после снятия
+   выделения - там оно привязано к выделенной ноте */
+@media (hover: hover) {
+    .note-anchor:hover .duration-panel {
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.12s ease, visibility 0s linear 0s;
+    }
+}
+
+@media (hover: none) {
+    .note-anchor.selected .duration-panel {
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.12s ease, visibility 0s linear 0s;
+    }
+}
+
 .note-anchor.menu-open .duration-panel {
     opacity: 1;
     visibility: visible;

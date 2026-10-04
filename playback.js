@@ -26,10 +26,29 @@
     }
 
     // Длительность элемента в долях (четвертях). duration - знаменатель, dotted - точка.
+    // Число точек у ноты. Булево значение из старых файлов считается одной точкой
+    function dotCount(value) {
+        if (value === true) return 1;
+        var count = Number(value);
+        if (!count || count < 0) return 0;
+        return Math.min(3, Math.floor(count));
+    }
+
     function beatsFor(duration, dotted) {
         var denominator = duration || 4;
         var beats = 4 / denominator;
-        return dotted ? beats * 1.5 : beats;
+
+        // Каждая следующая точка добавляет половину предыдущей добавки:
+        // одна - 1.5 длительности, две - 1.75, три - 1.875
+        var factor = 1;
+        var part = 0.5;
+        var dots = dotCount(dotted);
+        for (var i = 0; i < dots; i++) {
+            factor += part;
+            part = part / 2;
+        }
+
+        return beats * factor;
     }
 
     // Длительность элемента в секундах при заданном темпе.
@@ -268,6 +287,7 @@
 
     return {
         noteToFrequency: noteToFrequency,
+        dotCount: dotCount,
         beatsFor: beatsFor,
         secondsFor: secondsFor,
         totalSeconds: totalSeconds,

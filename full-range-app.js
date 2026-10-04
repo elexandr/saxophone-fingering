@@ -18,7 +18,16 @@ const MIN_SYSTEM_SCALE = 0.6;
 const HISTORY_LIMIT = 50;
 // Длительности от самой длинной к самой короткой. По этой лесенке ходят
 // Alt+вверх и Alt+вниз, поэтому точка стоит отдельной ступенью.
-const DURATION_LADDER = [
+const DURATION_LADDER = (() => {
+    // От самой длинной к самой короткой, каждая точка - отдельная ступень
+    const steps = [];
+    [1, 2, 4, 8, 16].forEach(duration => {
+        for (let dots = 3; dots >= 0; dots--) steps.push({ duration: duration, dotted: dots });
+    });
+    return steps;
+})();
+
+const DURATION_LADDER_UNUSED = [
     { duration: 1, dotted: true },
     { duration: 1, dotted: false },
     { duration: 2, dotted: true },
@@ -856,6 +865,12 @@ class FullRangeStaffManager {
         return translated === key ? NoteSymbols.durationInfo(value).label : translated;
     }
     
+    // Подпись кнопки точек: сколько точек стоит у ноты
+    dotsLabel(element) {
+        const dots = Playback.dotCount(element.dotted);
+        return dots > 0 ? '•'.repeat(dots) : '•';
+    }
+
     durationPanelMarkup(element) {
         const options = NoteSymbols.DURATIONS.map(item =>
             `<button type="button" class="duration-option${item.value === element.duration ? ' active' : ''}" ` +
@@ -865,8 +880,8 @@ class FullRangeStaffManager {
         return '<div class="duration-panel">' +
             `<button type="button" class="duration-btn" title="${t('duration.buttonTitle')}">` +
             NoteSymbols.durationInfo(element.duration).short + '</button>' +
-            `<label class="dot-toggle" title="${t('duration.dotTitle')}">` +
-            `<input type="checkbox"${element.dotted ? ' checked' : ''}></label>` +
+            `<button type="button" class="dot-toggle${Playback.dotCount(element.dotted) ? ' active' : ''}" ` +
+            `title="${t('duration.dotTitle')}">${this.dotsLabel(element)}</button>` +
             `<div class="duration-menu">${options}</div>` +
             '</div>';
     }
@@ -874,7 +889,7 @@ class FullRangeStaffManager {
     bindDurationPanel(anchor, element) {
         const button = anchor.querySelector('.duration-btn');
         const menu = anchor.querySelector('.duration-menu');
-        const dot = anchor.querySelector('.dot-toggle input');
+        const dot = anchor.querySelector('.dot-toggle');
         
         button.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -955,14 +970,15 @@ class FullRangeStaffManager {
     }
     
     setElementDotted(element, dotted, options = {}) {
-        if (!!element.dotted === !!dotted) return;
+        const count = Playback.dotCount(dotted);
+        if (Playback.dotCount(element.dotted) === count) return;
         
         if (options.history !== false) this.pushHistory();
-        element.dotted = !!dotted;
+        element.dotted = count;
         this.refreshElement(element);
         // Точка меняет длительность, а значит и границы тактов
         this.relayout();
-        this.updateStatus(t(element.dotted ? 'status.dotOn' : 'status.dotOff'));
+        this.updateStatus(t('status.dotsSet', { count: count }));
         this.scheduleAutosave();
     }
     
@@ -993,7 +1009,13 @@ class FullRangeStaffManager {
             option.classList.toggle('active', value === element.duration);
         });
         
-        const dot = anchor.querySelector('.dot-toggle input');
+        const dot = anchor.querySelector('.dot-toggle');
+        if (dot) {
+            dot.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setElementDotted(element, (Playback.dotCount(element.dotted) + 1) % 4);
+            });
+        }
         if (dot) dot.checked = !!element.dotted;
     }
     
@@ -1292,12 +1314,19 @@ class FullRangeStaffManager {
         // после отката нас возвращало бы к началу стана
         const scrollArea = document.querySelector('.scrollable-area');
         const scrollTop = scrollArea ? scrollArea.scrollTop : 0;
+        // Мелодия пересобирается, и идентификаторы у нот новые: запоминаем
+        // место выделенной ноты, чтобы вернуть выделение на неё же
+        const selectedIndex = this.notes.findIndex(note => note.id === this.selectedNoteId);
         
         this.restoring = true;
         this.applyMelody(from.pop());
         this.restoring = false;
         
         if (scrollArea) scrollArea.scrollTop = scrollTop;
+        
+        if (selectedIndex >= 0 && this.notes[selectedIndex]) {
+            this.selectNote(this.notes[selectedIndex].id);
+        }
         
         this.updateHistoryButtons();
         this.updateStatus(t(doneKey));
@@ -1320,7 +1349,7 @@ class FullRangeStaffManager {
         if (!element) return false;
         
         const index = DURATION_LADDER.findIndex(step =>
-            step.duration === element.duration && step.dotted === !!element.dotted);
+            step.duration === element.duration && step.dotted === Playback.dotCount(element.dotted));
         if (index === -1) return false;
         
         // direction 1 - длиннее, а лесенка начинается с самой длинной
@@ -1334,7 +1363,7 @@ class FullRangeStaffManager {
         // Запоминаем один раз на всё действие, а не отдельно на длительность и точку
         this.pushHistory();
         this.setElementDuration(element, step.duration, { history: false });
-        if (!!element.dotted !== step.dotted) {
+        if (Playback.dotCount(element.dotted) !== step.dotted) {
             this.setElementDotted(element, step.dotted, { history: false });
         }
         
@@ -2612,7 +2641,7 @@ class FullRangeStaffManager {
                 noteName: note.noteName,
                 displayName: note.displayName,
                 duration: note.duration,
-                dotted: !!note.dotted,
+                dotted: Playback.dotCount(note.dotted),
                 currentVariant: note.currentVariant || 1,
                 hasBarLine: !!note.hasBarLine,
                 repeatStart: !!note.repeatStart,
@@ -2680,7 +2709,7 @@ class FullRangeStaffManager {
             if (!element) return;
             
             element.duration = item.duration || 4;
-            element.dotted = !!item.dotted;
+            element.dotted = Playback.dotCount(item.dotted);
             
             // Возвращаем выбранный вариант аппликатуры
             if (!element.isRest && element.hasFingering && item.currentVariant > 1) {
@@ -3371,4 +3400,3 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('Saxophone Fingering Assistant - Full Range Version загружен');
 });
-

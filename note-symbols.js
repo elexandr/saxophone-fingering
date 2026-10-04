@@ -77,8 +77,16 @@
         return '<path class="glyph-flag" d="' + d + '" fill="#111111"/>';
     }
 
-    function dotMarkup() {
-        return '<circle class="glyph-dot" cx="' + (HEAD_RX + 6) + '" cy="0" r="' + DOT_RADIUS + '" fill="#111111"/>';
+    // Точки идут справа от головки друг за другом: их может быть до трёх
+    function dotMarkup(count) {
+        var total = Math.max(1, Math.min(3, count || 1));
+        var markup = '';
+
+        for (var i = 0; i < total; i++) {
+            markup += '<circle class="glyph-dot" cx="' + (HEAD_RX + 6 + i * 7) + '" cy="0" r="' + DOT_RADIUS + '" fill="#111111"/>';
+        }
+
+        return markup;
     }
 
     function accidentalMarkup(accidental) {
@@ -123,8 +131,9 @@
                 parts.push(flagMarkup(stemUp, i));
             }
         }
-        if (options.dotted) {
-            parts.push(dotMarkup());
+        var dots = options.dotted === true ? 1 : Math.min(3, Math.max(0, Number(options.dotted) || 0));
+        if (dots > 0) {
+            parts.push(dotMarkup(dots));
         }
         return wrap(parts.join(''));
     }
@@ -156,8 +165,9 @@
         options = options || {};
         var duration = durationInfo(options.duration).value;
         var parts = [haloMarkup(), hitMarkup(), restBody(duration)];
-        if (options.dotted) {
-            parts.push(dotMarkup());
+        var dots = options.dotted === true ? 1 : Math.min(3, Math.max(0, Number(options.dotted) || 0));
+        if (dots > 0) {
+            parts.push(dotMarkup(dots));
         }
         return wrap(parts.join(''));
     }

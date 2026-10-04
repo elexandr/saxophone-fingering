@@ -165,6 +165,7 @@
             'status.restInserted': 'Вставлена пауза',
             'status.durationSet': 'Длительность: {name}',
             'status.durationSetDotted': 'Длительность: {name} с точкой',
+            'status.dotsSet': 'Точек у ноты: {count}',
             'status.dotOn': 'Точка включена',
             'status.dotOff': 'Точка выключена',
 
@@ -243,7 +244,7 @@
             'duration.8': 'восьмая',
             'duration.16': 'шестнадцатая',
             'duration.buttonTitle': 'Длительность (Alt+вверх — длиннее, Alt+вниз — короче)',
-            'duration.dotTitle': 'Точка: увеличивает длительность в 1,5 раза',
+            'duration.dotTitle': 'Точка к длительности: нажмите, чтобы добавить одну, две или три',
 
             'consent.text': 'Чтобы открывать приложение на выбранном языке, мы сохраняем настройку в вашем браузере: в куки, а если браузер их не принимает — в локальном хранилище.',
             'consent.ok': 'Понятно',
@@ -404,6 +405,7 @@
             'status.restInserted': 'Inserted a rest',
             'status.durationSet': 'Duration: {name}',
             'status.durationSetDotted': 'Duration: {name} with a dot',
+            'status.dotsSet': 'Dots on the note: {count}',
             'status.dotOn': 'Dot on',
             'status.dotOff': 'Dot off',
 
@@ -482,7 +484,7 @@
             'duration.8': 'eighth',
             'duration.16': 'sixteenth',
             'duration.buttonTitle': 'Duration (Alt+Up longer, Alt+Down shorter)',
-            'duration.dotTitle': 'Dot: makes the note half as long again',
+            'duration.dotTitle': 'Duration dot: click to add one, two or three',
 
             'consent.text': 'To reopen the app in your language we store the setting in your browser: in a cookie, or in local storage if the browser rejects cookies.',
             'consent.ok': 'Got it',
