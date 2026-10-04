@@ -1582,7 +1582,6 @@ class FullRangeStaffManager {
             
             other.currentVariant = variant;
             other.fingering = `${other.fingeringBase}_v${variant}.jpg`;
-            this.updateFingering(other);
             updated++;
         });
         
@@ -3372,5 +3371,4 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('Saxophone Fingering Assistant - Full Range Version загружен');
 });
-
 

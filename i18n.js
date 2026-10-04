@@ -385,7 +385,6 @@
             'status.restNoPitch': 'A rest has no pitch',
             'status.pitchLimit': 'Cannot change the pitch: the range limit is reached',
             'status.positionMissing': 'Position {position} not found for note {name}',
-            'status.melodySaved': 'Мелодия сохранена в файл',
             'status.noteChanged': 'Note changed: {name}',
             'status.noteDeleted': 'Note deleted: {name}',
             'status.restDeleted': 'Rest deleted',
