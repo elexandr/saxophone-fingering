@@ -2285,37 +2285,45 @@ class FullRangeStaffManager {
     
     // Номера тактов: маленькая серая цифра над верхней линейкой в начале такта.
     // Номер сквозной по всей мелодии, как в нотах.
+    // Номера тактов: маленькая серая цифра над верхней толстой линейкой в начале
+    // такта. Считаем по долям, а не по нотам: граница такта может попасть внутрь
+    // длинной ноты, и тогда ноты в начале такта просто нет.
     renderMeasureNumbers(marks) {
         const slot = this.imageSize + 2;
+        const measure = this.measureBeats();
+        let beat = 0;
+        let nextNumber = 0;
         let number = 0;
 
-        this.notes.forEach((element, index) => {
-            const previous = index > 0 ? this.notes[index - 1] : null;
-            const firstInSystem = !previous || previous.system !== element.system;
-
-            // Такт начинается с первой ноты строки или там, где разметка
-            // поставила черту после предыдущей ноты
-            const previousMark = previous ? marks.get(previous.id) : null;
-            const afterBarLine = previousMark === 'barline' || previousMark === 'repeat-end' ||
-                (previous && (previous.hasBarLine || previous.repeatEnd));
-
-            if (!firstInSystem && !afterBarLine) return;
-
-            number++;
-
+        this.notes.forEach(element => {
+            const beats = this.elementBeats(element);
+            const start = beat;
+            const end = beat + beats;
             const staff = this.staffContainers[element.system];
-            if (!staff) return;
 
-            const label = document.createElement('span');
-            label.className = 'measure-number fade-in';
-            label.textContent = number;
-            label.style.left = Math.round(element.x - slot / 2) + 'px';
-            // Прямо над верхней толстой линейкой: между ней и ближней
-            // добавочной линейкой, а не над всем станом
-            label.style.top = (STAFF_MAIN_TOP - 14) + 'px';
+            while (nextNumber <= end - 1e-6 && staff) {
+                if (nextNumber >= start - 1e-6) {
+                    number++;
 
-            staff.appendChild(label);
-            this.notationMarks.push(label);
+                    // Если граница внутри ноты, сдвигаем цифру к самой границе
+                    const share = beats > 0
+                        ? Math.max(0, Math.min(1, (nextNumber - start) / beats))
+                        : 0;
+
+                    const label = document.createElement('span');
+                    label.className = 'measure-number fade-in';
+                    label.textContent = number;
+                    label.style.left = Math.round(element.x - slot / 2 + slot * share) + 'px';
+                    label.style.top = (STAFF_MAIN_TOP - 14) + 'px';
+
+                    staff.appendChild(label);
+                    this.notationMarks.push(label);
+                }
+
+                nextNumber += measure;
+            }
+
+            beat = end;
         });
     }
 
