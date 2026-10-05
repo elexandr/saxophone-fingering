@@ -16,12 +16,13 @@
     var SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
     // 'C#4' / 'Db4' -> частота в герцах. A4 = 440 Гц.
-    function noteToFrequency(name) {
+    // semitones - сдвиг инструмента: 0 даёт записанную ноту, -12 звучит на октаву ниже
+    function noteToFrequency(name, semitones) {
         var m = NOTE_RE.exec(String(name == null ? '' : name).trim());
         if (!m) return null;
         var base = SEMITONE[m[1].toUpperCase()];
         var accidental = m[2] === '#' ? 1 : (m[2] === 'b' ? -1 : 0);
-        var midi = (parseInt(m[3], 10) + 1) * 12 + base + accidental;
+        var midi = (parseInt(m[3], 10) + 1) * 12 + base + accidental + (Number(semitones) || 0);
         return 440 * Math.pow(2, (midi - 69) / 12);
     }
 
@@ -159,6 +160,7 @@
         this.timers = [];
         this.playing = false;
     this.frame = null;
+    this.transpose = 0; // сдвиг инструмента в полутонах
     this.timeline = [];
     }
 
@@ -298,6 +300,11 @@
         }
     };
 
+    // Сдвиг инструмента: ноты и аппликатуры не меняются, меняется только звук
+    MelodyPlayer.prototype.setTranspose = function (semitones) {
+        this.transpose = Number(semitones) || 0;
+    };
+
     MelodyPlayer.prototype.play = function (elements, tempo, handlers, options) {
         handlers = handlers || {};
         options = options || {};
@@ -327,7 +334,7 @@
             var startAt = cursor;
 
             if (!element.isRest) {
-                var frequency = noteToFrequency(element.noteName);
+                var frequency = noteToFrequency(element.noteName, self.transpose);
                 if (frequency) {
                     self.scheduleNote(frequency, startAt, durationSec * 0.92);
                 }
@@ -393,6 +400,7 @@
             if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.frame);
             clearTimeout(this.frame);
             this.frame = null;
+    this.transpose = 0; // сдвиг инструмента в полутонах
         }
         this.timers.forEach(function (id) { clearTimeout(id); });
         this.timers = [];

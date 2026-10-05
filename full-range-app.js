@@ -55,6 +55,8 @@ class FullRangeStaffManager {
         this.tempo = 80; // Темп воспроизведения, ударов в минуту
         this.loopPlayback = false;
         // Метроном и отсчёт перед началом
+        // Сдвиг инструмента в полутонах: -12 по умолчанию
+        this.instrumentTranspose = -12;
         this.metronome = false;
         this.metronomeVolume = 0.6;
         this.countIn = false; // Играть по кругу
@@ -1343,7 +1345,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (!this.melodyPlayer || this.melodyPlayer.playing) return false;
         if (!Playback.audioSupported()) return false;
         
-        const frequency = Playback.noteToFrequency(element.noteName || element.displayName);
+        const frequency = Playback.noteToFrequency(element.noteName || element.displayName, this.instrumentTranspose);
         if (!frequency) return false;
         
         const ctx = this.melodyPlayer.ensureContext();
@@ -2936,6 +2938,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 loopPlayback: this.loopPlayback,
                 metronome: this.metronome,
                 metronomeVolume: this.metronomeVolume,
+                instrumentTranspose: this.instrumentTranspose,
                 countIn: this.countIn,
                 displayMode: this.displayMode,
                 tempo: this.tempo,
@@ -3046,6 +3049,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 loopPlayback: this.loopPlayback,
                 metronome: this.metronome,
                 metronomeVolume: this.metronomeVolume,
+                instrumentTranspose: this.instrumentTranspose,
                 countIn: this.countIn,
                 displayMode: this.displayMode
             }
@@ -3124,6 +3128,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
     
     applySettings(settings) {
+        if (settings && settings.instrumentTranspose !== undefined) {
+            this.setInstrumentTranspose(settings.instrumentTranspose);
+        }
         if (!settings) return;
         
         if (settings.imageSize) {
@@ -3165,6 +3172,25 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }
     }
     
+    // Сдвиг инструмента: ноты и аппликатуры остаются на месте, меняется только
+    // высота звука. 0 - нота звучит как записана, -12 - на октаву ниже
+    setInstrumentTranspose(value) {
+        let semitones = Math.round(Number(value));
+        if (!Number.isFinite(semitones)) semitones = -12;
+        semitones = Math.max(-24, Math.min(24, semitones));
+
+        this.instrumentTranspose = semitones;
+
+        const input = document.getElementById('instrument-transpose');
+        if (input && parseInt(input.value, 10) !== semitones) input.value = semitones;
+
+        if (this.melodyPlayer) this.melodyPlayer.setTranspose(semitones);
+
+        this.updateStatus(t('status.instrumentTranspose', { value: semitones }));
+        this.scheduleAutosave();
+
+        return semitones;
+    }
     setTempo(value) {
         const parsed = parseInt(value, 10);
         const tempo = Math.min(240, Math.max(30, parsed || 80));
@@ -3372,6 +3398,33 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.transposeAllNotes(-1);
     });
     
+    // Сдвиг инструмента: поле, кнопки «минус» и «плюс», кнопки типовых саксофонов
+    document.getElementById('instrument-transpose').addEventListener('change', (e) => {
+        staffManager.setInstrumentTranspose(e.target.value);
+    });
+
+    document.getElementById('btn-instrument-minus').addEventListener('click', () => {
+        staffManager.setInstrumentTranspose(staffManager.instrumentTranspose - 1);
+    });
+
+    document.getElementById('btn-instrument-plus').addEventListener('click', () => {
+        staffManager.setInstrumentTranspose(staffManager.instrumentTranspose + 1);
+    });
+
+    document.querySelectorAll('.btn-preset').forEach(button => {
+        button.addEventListener('click', () => {
+            staffManager.setInstrumentTranspose(button.getAttribute('data-instrument'));
+        });
+    });
+
+    // Темп меняется кнопками с шагом 5, поле остаётся редактируемым вручную
+    document.getElementById('btn-tempo-minus').addEventListener('click', () => {
+        staffManager.setTempo(staffManager.tempo - 5);
+    });
+
+    document.getElementById('btn-tempo-plus').addEventListener('click', () => {
+        staffManager.setTempo(staffManager.tempo + 5);
+    });
     // Сохранение/загрузка
     document.getElementById('btn-save').addEventListener('click', () => {
         staffManager.saveToFile();
@@ -3482,6 +3535,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Узлы подсветки готовим заранее: в кадре не должно быть поиска по документу
             staffManager.prepareHighlightNodes(sequence);
+            staffManager.melodyPlayer.setTranspose(staffManager.instrumentTranspose);
 
             const started = staffManager.melodyPlayer.play(sequence, staffManager.tempo, {
                 onElement: (index, element) => {
