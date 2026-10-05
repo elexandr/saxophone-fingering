@@ -315,7 +315,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
         this.notes.forEach(element => {
             const label = element.element ? element.element.querySelector('.note-label') : null;
-            if (label) label.textContent = element.displayName;
+            if (label) label.textContent = this.displayNoteName(element.noteName);
             this.refreshElement(element);
         });
         
@@ -917,7 +917,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
         anchor.innerHTML = this.glyphMarkup(element) +
             this.durationPanelMarkup(element) +
-            (this.showNoteNames && !element.isRest ? `<div class="note-label">${element.displayName}</div>` : '');
+            (this.showNoteNames && !element.isRest ? `<div class="note-label">${this.displayNoteName(element.noteName)}</div>` : '');
         
         anchor.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1277,7 +1277,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         note.element.setAttribute('data-stem', note.stemUp ? 'up' : 'down');
         note.element.setAttribute('data-position-id', newNoteInfo.positionId);
         const label = note.element.querySelector('.note-label');
-        if (label) label.textContent = newNoteInfo.displayName;
+        if (label) label.textContent = this.displayNoteName(newNoteInfo.displayName);
         this.refreshElement(note);
         
         document.getElementById('selected-note').textContent = newNoteInfo.displayName;
@@ -1666,7 +1666,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             note.element.setAttribute('data-stem', note.stemUp ? 'up' : 'down');
             note.element.setAttribute('data-position-id', newNoteInfo.positionId);
             const label = note.element.querySelector('.note-label');
-            if (label) label.textContent = newNoteInfo.displayName;
+            if (label) label.textContent = this.displayNoteName(newNoteInfo.displayName);
             this.refreshElement(note);
             
             changedCount++;
@@ -3257,6 +3257,30 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.updateAllFingerings();
     }
     // Сдвиг звука приложения: насколько звук отличается от нот на стане
+    // Сдвиг подписей нот. Связь выключена - нотоносец связан со звуком,
+    // поэтому имена показываем в звучащей октаве. Связь включена - показываем
+    // стандартные саксофонные имена, как их читает саксофонист
+    displayShift() {
+        return this.fingeringLinked ? 0 : (Number(this.appSoundShift) || 0);
+    }
+
+    displayNoteName(noteName) {
+        const shift = this.displayShift();
+        if (!shift) return noteName;
+
+        return Playback.transposeNoteName(noteName, shift);
+    }
+
+    // Подписи нот перерисовываем при смене сдвигов
+    refreshNoteLabels() {
+        this.notes.forEach(element => {
+            if (element.isRest || !element.element) return;
+
+            const label = element.element.querySelector('.note-label');
+            if (label) label.textContent = this.displayNoteName(element.noteName);
+        });
+    }
+
     setAppSoundShift(value) {
         this.appSoundShift = this.clampShift(value);
         this.afterShiftChange();
@@ -3292,6 +3316,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (this.melodyPlayer) this.melodyPlayer.setTranspose(this.appSoundShift);
 
         this.refreshInstrumentFingerings();
+        this.refreshNoteLabels();
         this.syncFineControls();
         this.syncPresetHighlight();
         this.updateInstrumentExample();
@@ -3456,7 +3481,13 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             if (!element.isRest) {
                 const midi = Midi.nameToMidi(element.noteName || element.displayName);
                 if (midi !== null) {
-                    result.push({ midi: midi, startBeat: beat, beats: beats });
+                    // В MIDI уходит звучащая высота, а не написанная: иначе
+            // гитарная мелодия окажется в файле на октаву выше
+            result.push({
+                midi: midi + (Number(this.appSoundShift) || 0),
+                startBeat: beat,
+                beats: beats
+            });
                 }
             }
             
