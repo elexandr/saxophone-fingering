@@ -3232,6 +3232,14 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Аппликатуры зависят от сдвига: ноты те же, клавиши другие
         this.refreshInstrumentFingerings();
 
+        // Наглядный пример: сразу видно, во что превращается нота на стане
+        const example = document.getElementById('instrument-example');
+        if (example) {
+            example.textContent = t('instrument.example', {
+                sounding: Playback.transposeNoteName('C4', semitones)
+            });
+        }
+
         this.updateStatus(t('status.instrumentTranspose', { value: semitones }));
         this.scheduleAutosave();
 
@@ -3471,6 +3479,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-tempo-plus').addEventListener('click', () => {
         staffManager.setTempo(staffManager.tempo + 5);
     });
+    // Сдвиг инструмента применяем сразу при запуске: и плееру, и строке-примеру
+    staffManager.melodyPlayer.setTranspose(staffManager.instrumentTranspose);
+    staffManager.setInstrumentTranspose(staffManager.instrumentTranspose);
     // Сохранение/загрузка
     document.getElementById('btn-save').addEventListener('click', () => {
         staffManager.saveToFile();

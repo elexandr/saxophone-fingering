@@ -1433,3 +1433,9 @@ body {
     border-color: #667eea;
     background: #f7fafc;
 }
+/* Наглядный пример: как звучит до на стане при текущем сдвиге */
+.instrument-example {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: #718096;
+}
