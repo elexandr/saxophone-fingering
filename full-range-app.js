@@ -3207,7 +3207,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // при нём нота звучит ровно так, как подписана, и смена значения сдвигает
     // звук относительно этой точки, а не от нуля
     soundSemitones() {
-        return Number(this.appSoundShift) || 0;
+        // Точка отсчёта - значение -12: при нём нота звучит ровно как записана
+        return (Number(this.appSoundShift) || 0) + 12;
     }
     fingeringFor(noteName) {
         const written = this.getNoteInfoByName(noteName);
@@ -3261,7 +3262,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // поэтому имена показываем в звучащей октаве. Связь включена - показываем
     // стандартные саксофонные имена, как их читает саксофонист
     displayShift() {
-        return this.fingeringLinked ? 0 : (Number(this.appSoundShift) || 0);
+        // Связь выключена: нотоносец связан со звуком, имена идут в звучащей октаве
+        return this.fingeringLinked ? 0 : this.soundSemitones();
     }
 
     displayNoteName(noteName) {
@@ -3484,7 +3486,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                     // В MIDI уходит звучащая высота, а не написанная: иначе
             // гитарная мелодия окажется в файле на октаву выше
             result.push({
-                midi: midi + (Number(this.appSoundShift) || 0),
+                midi: midi + this.soundSemitones(),
                 startBeat: beat,
                 beats: beats
             });
