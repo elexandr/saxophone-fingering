@@ -1439,3 +1439,32 @@ body {
     font-size: 11px;
     color: #718096;
 }
+
+/* Пресет, совпавший с тонкой настройкой, горит зелёным */
+.btn-preset.active {
+    border-color: #38a169;
+    background: #f0fff4;
+    color: #276749;
+    font-weight: 600;
+}
+
+/* Сворачиваемая тонкая настройка */
+.fine-head {
+    cursor: pointer;
+    user-select: none;
+}
+
+.fine-head .fine-arrow {
+    float: right;
+    font-size: 11px;
+    line-height: 18px;
+    transition: transform 0.15s ease;
+}
+
+.fine-head[aria-expanded="true"] .fine-arrow {
+    transform: rotate(180deg);
+}
+
+.fine-body[hidden] {
+    display: none;
+}

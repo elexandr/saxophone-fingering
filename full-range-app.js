@@ -55,8 +55,12 @@ class FullRangeStaffManager {
         this.tempo = 80; // Темп воспроизведения, ударов в минуту
         this.loopPlayback = false;
         // Метроном и отсчёт перед началом
-        // Сдвиг инструмента в полутонах: -12 по умолчанию
-        this.instrumentTranspose = -12;
+        // Сдвиг звука приложения: насколько звук отличается от нот на стане
+        this.appSoundShift = -12;
+        // Сдвиг звука инструмента: насколько саксофон звучит выше или ниже аппликатуры
+        this.saxShift = -12;
+        // Связь аппликатуры со станом: включена - картинка по ноте стана
+        this.fingeringLinked = false;
         this.metronome = false;
         this.metronomeVolume = 0.6;
         this.countIn = false; // Играть по кругу
@@ -2941,7 +2945,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 loopPlayback: this.loopPlayback,
                 metronome: this.metronome,
                 metronomeVolume: this.metronomeVolume,
-                instrumentTranspose: this.instrumentTranspose,
+                appSoundShift: this.appSoundShift,
+                saxShift: this.saxShift,
+                fingeringLinked: this.fingeringLinked,
                 countIn: this.countIn,
                 displayMode: this.displayMode,
                 tempo: this.tempo,
@@ -3052,7 +3058,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 loopPlayback: this.loopPlayback,
                 metronome: this.metronome,
                 metronomeVolume: this.metronomeVolume,
-                instrumentTranspose: this.instrumentTranspose,
+                appSoundShift: this.appSoundShift,
+                saxShift: this.saxShift,
+                fingeringLinked: this.fingeringLinked,
                 countIn: this.countIn,
                 displayMode: this.displayMode
             }
@@ -3131,8 +3139,22 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
     
     applySettings(settings) {
-        if (settings && settings.instrumentTranspose !== undefined) {
-            this.setInstrumentTranspose(settings.instrumentTranspose);
+        if (settings && settings.appSoundShift !== undefined) {
+            this.appSoundShift = this.clampShift(settings.appSoundShift);
+        }
+
+        // Файлы прежних версий хранили один сдвиг: читаем его как оба
+        if (settings && settings.appSoundShift === undefined && settings.instrumentTranspose !== undefined) {
+            this.appSoundShift = this.clampShift(settings.instrumentTranspose);
+            this.saxShift = this.appSoundShift;
+        }
+
+        if (settings && settings.saxShift !== undefined) {
+            this.saxShift = this.clampShift(settings.saxShift);
+        }
+
+        if (settings && settings.fingeringLinked !== undefined) {
+            this.fingeringLinked = !!settings.fingeringLinked;
         }
         if (!settings) return;
         
@@ -3185,17 +3207,17 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // при нём нота звучит ровно так, как подписана, и смена значения сдвигает
     // звук относительно этой точки, а не от нуля
     soundSemitones() {
-        return (Number(this.instrumentTranspose) || 0) + 12;
+        return Number(this.appSoundShift) || 0;
     }
     fingeringFor(noteName) {
         const written = this.getNoteInfoByName(noteName);
-        // Считаем от того же сдвига, что и звук: при точке отсчёта нота
-        // берётся привычной аппликатурой, а смена значения её меняет
-        const semitones = this.soundSemitones();
+        // Связь включена: картинка это аппликатура самой ноты стана.
+        // Выключена: картинка той ноты, что на инструменте звучит как приложение
+        const shift = this.fingeringLinked ? 0 : (this.appSoundShift - this.saxShift);
 
-        if (!semitones || !written) return written;
+        if (!shift || !written) return written;
 
-        const shiftedName = Playback.transposeNoteName(noteName, -semitones);
+        const shiftedName = Playback.transposeNoteName(noteName, shift);
         const shifted = shiftedName === noteName ? written : this.getNoteInfoByName(shiftedName);
 
         // Если для сдвинутой ноты картинки нет, показываем аппликатуру
@@ -3234,33 +3256,128 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.recomputeFingerings();
         this.updateAllFingerings();
     }
-    setInstrumentTranspose(value) {
+    // Сдвиг звука приложения: насколько звук отличается от нот на стане
+    setAppSoundShift(value) {
+        this.appSoundShift = this.clampShift(value);
+        this.afterShiftChange();
+
+        return this.appSoundShift;
+    }
+
+    // Сдвиг звука инструмента: насколько саксофон звучит выше или ниже аппликатуры
+    setSaxSoundShift(value) {
+        this.saxShift = this.clampShift(value);
+        this.afterShiftChange();
+
+        return this.saxShift;
+    }
+
+    // Связь аппликатуры со станом
+    setFingeringLinked(value) {
+        this.fingeringLinked = !!value;
+        this.afterShiftChange();
+
+        return this.fingeringLinked;
+    }
+
+    clampShift(value) {
         let semitones = Math.round(Number(value));
-        if (!Number.isFinite(semitones)) semitones = -12;
-        semitones = Math.max(-24, Math.min(24, semitones));
+        if (!Number.isFinite(semitones)) semitones = 0;
 
-        this.instrumentTranspose = semitones;
+        return Math.max(-24, Math.min(24, semitones));
+    }
 
-        const input = document.getElementById('instrument-transpose');
-        if (input && parseInt(input.value, 10) !== semitones) input.value = semitones;
+    // Общее после смены любой настройки: звук, аппликатуры, пресеты и пример
+    afterShiftChange() {
+        if (this.melodyPlayer) this.melodyPlayer.setTranspose(this.appSoundShift);
 
-        if (this.melodyPlayer) this.melodyPlayer.setTranspose(this.soundSemitones());
-
-        // Аппликатуры зависят от сдвига: ноты те же, клавиши другие
         this.refreshInstrumentFingerings();
+        this.syncFineControls();
+        this.syncPresetHighlight();
+        this.updateInstrumentExample();
 
-        // Наглядный пример: сразу видно, во что превращается нота на стане
-        const example = document.getElementById('instrument-example');
-        if (example) {
-            example.textContent = t('instrument.example', {
-                sounding: Playback.transposeNoteName('C4', this.soundSemitones())
-            });
+        this.updateStatus(t('status.shifts', {
+            app: this.appSoundShift,
+            sax: this.saxShift
+        }));
+
+        this.scheduleAutosave();
+    }
+
+    // Поля тонкой настройки и флажок приводятся к текущим значениям
+    syncFineControls() {
+        const appInput = document.getElementById('app-sound-shift');
+        if (appInput && parseInt(appInput.value, 10) !== this.appSoundShift) {
+            appInput.value = this.appSoundShift;
         }
 
-        this.updateStatus(t('status.instrumentTranspose', { value: semitones }));
-        this.scheduleAutosave();
+        const saxInput = document.getElementById('sax-sound-shift');
+        if (saxInput && parseInt(saxInput.value, 10) !== this.saxShift) {
+            saxInput.value = this.saxShift;
+        }
 
-        return semitones;
+        const linked = document.getElementById('fingering-linked');
+        if (linked) linked.checked = !!this.fingeringLinked;
+    }
+
+    // Подсветка пресета, который совпал с тонкой настройкой
+    syncPresetHighlight() {
+        document.querySelectorAll('.btn-preset').forEach(button => {
+            const same = Number(button.getAttribute('data-app-shift')) === this.appSoundShift &&
+                Number(button.getAttribute('data-sax-shift')) === this.saxShift &&
+                (button.getAttribute('data-linked') === '1') === !!this.fingeringLinked;
+
+            button.classList.toggle('active', same);
+        });
+    }
+
+    // Пресет просто выставляет значения тонкой настройки
+    applyPreset(button) {
+        if (!button) return;
+
+        this.appSoundShift = this.clampShift(button.getAttribute('data-app-shift'));
+        this.saxShift = this.clampShift(button.getAttribute('data-sax-shift'));
+        this.fingeringLinked = button.getAttribute('data-linked') === '1';
+
+        this.afterShiftChange();
+    }
+
+    // Наглядная строка: что играет приложение и что звучит у саксофона
+    updateInstrumentExample() {
+        const example = document.getElementById('instrument-example');
+        if (!example) return;
+
+        const fingering = this.fingeringFor('C4');
+        const appNote = Playback.transposeNoteName('C4', this.appSoundShift);
+        const saxNote = Playback.transposeNoteName(
+            fingering ? fingering.displayName : 'C4', this.saxShift);
+
+        example.textContent = t('instrument.example', { app: appNote, sax: saxNote });
+    }
+
+    // Свёрнутая тонкая настройка: положение запоминаем между запусками
+    toggleFineBlock(open) {
+        const body = document.getElementById('fine-body');
+        const head = document.getElementById('fine-toggle');
+        if (!body) return;
+
+        const shouldOpen = (open === undefined) ? body.hidden : !!open;
+
+        body.hidden = !shouldOpen;
+        if (head) head.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+
+        try {
+            localStorage.setItem('sax-fine-open', shouldOpen ? '1' : '0');
+        } catch (error) {
+            // Приватный режим: просто не запоминаем
+        }
+    }
+
+    restoreFineBlock() {
+        let stored = null;
+        try { stored = localStorage.getItem('sax-fine-open'); } catch (error) { stored = null; }
+
+        this.toggleFineBlock(stored === '1');
     }
     setTempo(value) {
         const parsed = parseInt(value, 10);
@@ -3470,22 +3587,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Сдвиг инструмента: поле, кнопки «минус» и «плюс», кнопки типовых саксофонов
-    document.getElementById('instrument-transpose').addEventListener('change', (e) => {
-        staffManager.setInstrumentTranspose(e.target.value);
+    // Тонкая настройка: два сдвига с кнопками и связь аппликатуры со станом
+    document.getElementById('app-sound-shift').addEventListener('change', (e) => {
+        staffManager.setAppSoundShift(e.target.value);
     });
 
-    document.getElementById('btn-instrument-minus').addEventListener('click', () => {
-        staffManager.setInstrumentTranspose(staffManager.instrumentTranspose - 1);
+    document.getElementById('btn-app-shift-minus').addEventListener('click', () => {
+        staffManager.setAppSoundShift(staffManager.appSoundShift - 1);
     });
 
-    document.getElementById('btn-instrument-plus').addEventListener('click', () => {
-        staffManager.setInstrumentTranspose(staffManager.instrumentTranspose + 1);
+    document.getElementById('btn-app-shift-plus').addEventListener('click', () => {
+        staffManager.setAppSoundShift(staffManager.appSoundShift + 1);
+    });
+
+    document.getElementById('sax-sound-shift').addEventListener('change', (e) => {
+        staffManager.setSaxSoundShift(e.target.value);
+    });
+
+    document.getElementById('btn-sax-shift-minus').addEventListener('click', () => {
+        staffManager.setSaxSoundShift(staffManager.saxShift - 1);
+    });
+
+    document.getElementById('btn-sax-shift-plus').addEventListener('click', () => {
+        staffManager.setSaxSoundShift(staffManager.saxShift + 1);
+    });
+
+    document.getElementById('fingering-linked').addEventListener('change', (e) => {
+        staffManager.setFingeringLinked(e.target.checked);
     });
 
     document.querySelectorAll('.btn-preset').forEach(button => {
-        button.addEventListener('click', () => {
-            staffManager.setInstrumentTranspose(button.getAttribute('data-instrument'));
-        });
+        button.addEventListener('click', () => staffManager.applyPreset(button));
+    });
+
+    document.getElementById('fine-toggle').addEventListener('click', () => {
+        staffManager.toggleFineBlock();
+    });
+
+    document.getElementById('fine-toggle').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            staffManager.toggleFineBlock();
+        }
     });
 
     // Темп меняется кнопками с шагом 5, поле остаётся редактируемым вручную
@@ -3496,9 +3639,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-tempo-plus').addEventListener('click', () => {
         staffManager.setTempo(staffManager.tempo + 5);
     });
-    // Сдвиг инструмента применяем сразу при запуске: и плееру, и строке-примеру
-    staffManager.melodyPlayer.setTranspose(staffManager.soundSemitones());
-    staffManager.setInstrumentTranspose(staffManager.instrumentTranspose);
+    // Сдвиги применяем при запуске: плееру, полям, пресетам и примеру
+    staffManager.melodyPlayer.setTranspose(staffManager.appSoundShift);
+    staffManager.syncFineControls();
+    staffManager.syncPresetHighlight();
+    staffManager.updateInstrumentExample();
+    staffManager.restoreFineBlock();
     // Сохранение/загрузка
     document.getElementById('btn-save').addEventListener('click', () => {
         staffManager.saveToFile();
