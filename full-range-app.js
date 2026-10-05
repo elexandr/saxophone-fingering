@@ -1792,6 +1792,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
     
     updateAllFingerings() {
+        // Карточки всегда строятся по текущим настройкам: загруженные
+        // ноты и добавленные следом не должны расходиться
+        this.recomputeFingerings();
         // Каждая строка наполняется своими карточками
         this.fingeringContainers.forEach(row => { row.innerHTML = ''; });
         
@@ -3201,7 +3204,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
 
     // Пересчитать аппликатуры всех нот: вызывается при смене сдвига инструмента
-    refreshInstrumentFingerings() {
+    // Аппликатуры по текущим настройкам: только поля нот, без перерисовки
+    recomputeFingerings() {
         this.notes.forEach(note => {
             if (note.isRest) return;
 
@@ -3223,6 +3227,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             // количество вариантов может измениться, но выбор пользователя важнее
         });
 
+    }
+
+    // Пересчитать и сразу перерисовать карточки
+    refreshInstrumentFingerings() {
+        this.recomputeFingerings();
         this.updateAllFingerings();
     }
     setInstrumentTranspose(value) {
