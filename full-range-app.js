@@ -3315,6 +3315,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
     // Общее после смены любой настройки: звук, аппликатуры, пресеты и пример
     afterShiftChange() {
+        // Если звук изменился во время игры, остаток мелодии перепланируем:
+        // короткая заминка здесь - осознанный выбор в пользу верного звука
+        const needsReplan = !!this.melodyPlayer && this.melodyPlayer.playing &&
+            this.melodyPlayer.transpose !== this.soundSemitones();
+
         // Плееру всегда отдаём сдвиг от точки отсчёта, а не сырое значение
         if (this.melodyPlayer) this.melodyPlayer.setTranspose(this.soundSemitones());
 
@@ -3330,6 +3335,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }));
 
         this.scheduleAutosave();
+
+        if (needsReplan) this.melodyPlayer.replan(this.soundSemitones());
     }
 
     // Поля тонкой настройки и флажок приводятся к текущим значениям

@@ -336,6 +336,9 @@
         var cursor = ctx.currentTime + leadIn;
         var list = elements || [];
 
+        // Запоминаем, что и как играем: понадобится для перепланирования на лету
+        this.lastPlay = { elements: list, tempo: tempo, handlers: handlers, options: options };
+
         this.playing = true;
 
         // Расписание: что когда звучит. Подсветку ведём по тем же временам,
@@ -407,13 +410,32 @@
         return true;
     };
 
+    // Перепланировать остаток мелодии с новым сдвигом: звук меняется на лету.
+    // Текущая нота обрывается - это осознанная плата за смену звука во время игры
+    MelodyPlayer.prototype.replan = function (semitones) {
+        if (!this.playing || !this.lastPlay) return false;
+
+        // Сдвиг запоминаем в любом случае: иначе состояние плеера разойдётся
+        // с настройками, и следующая смена снова вызовет перепланирование
+        this.setTranspose(semitones);
+
+        var rest = this.lastPlay.elements.slice(this.timelineIndex || 0);
+        if (!rest.length) return false;
+
+        var tempo = this.lastPlay.tempo;
+        var handlers = this.lastPlay.handlers;
+        var options = this.lastPlay.options;
+        this.play(rest, tempo, handlers, options);
+
+        return true;
+    };
+
     MelodyPlayer.prototype.stop = function () {
         // Кадр подсветки тоже снимаем: иначе он продолжит тикать
         if (this.frame !== null && this.frame !== undefined) {
             if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.frame);
             clearTimeout(this.frame);
             this.frame = null;
-    this.transpose = 0; // сдвиг инструмента в полутонах
         }
         this.timers.forEach(function (id) { clearTimeout(id); });
         this.timers = [];
