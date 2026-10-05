@@ -3315,7 +3315,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
     // Общее после смены любой настройки: звук, аппликатуры, пресеты и пример
     afterShiftChange() {
-        if (this.melodyPlayer) this.melodyPlayer.setTranspose(this.appSoundShift);
+        // Плееру всегда отдаём сдвиг от точки отсчёта, а не сырое значение
+        if (this.melodyPlayer) this.melodyPlayer.setTranspose(this.soundSemitones());
 
         this.refreshInstrumentFingerings();
         this.refreshNoteLabels();
@@ -3673,7 +3674,7 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.setTempo(staffManager.tempo + 5);
     });
     // Сдвиги применяем при запуске: плееру, полям, пресетам и примеру
-    staffManager.melodyPlayer.setTranspose(staffManager.appSoundShift);
+    staffManager.melodyPlayer.setTranspose(staffManager.soundSemitones());
     staffManager.syncFineControls();
     staffManager.syncPresetHighlight();
     staffManager.updateInstrumentExample();
