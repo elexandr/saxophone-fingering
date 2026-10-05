@@ -1382,6 +1382,7 @@ body {
 }
 /* Поле с кнопками «минус» и «плюс»: темп и сдвиг инструмента */
 .number-row {
+    flex-direction: row; /* кнопки минус и плюс стоят по бокам поля */
     display: flex;
     align-items: center;
     gap: 6px;
