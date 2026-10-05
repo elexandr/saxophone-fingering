@@ -2207,7 +2207,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             
             const existing = note.element.querySelector('.note-label');
             if (show && !existing) {
-                note.element.insertAdjacentHTML('beforeend', `<div class="note-label">${note.displayName}</div>`);
+                note.element.insertAdjacentHTML('beforeend', `<div class="note-label">${this.displayNoteName(note.displayName)}</div>`);
             } else if (!show && existing) {
                 existing.remove();
             }
@@ -2896,7 +2896,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             element.element.style.top = position.y + 'px';
             element.element.setAttribute('data-stem', element.stemUp ? 'up' : 'down');
             const label = element.element.querySelector('.note-label');
-            if (label) label.textContent = info.displayName;
+            if (label) label.textContent = this.displayNoteName(info.displayName);
             this.refreshElement(element);
         });
         
