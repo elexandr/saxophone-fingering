@@ -3221,9 +3221,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const shiftedName = Playback.transposeNoteName(noteName, shift);
         const shifted = shiftedName === noteName ? written : this.getNoteInfoByName(shiftedName);
 
-        // Если для сдвинутой ноты картинки нет, показываем аппликатуру
-        // записанной: пустая карточка хуже, чем привычная аппликатура
-        return (shifted && shifted.hasFingering) ? shifted : written;
+        // Если у сдвинутой ноты аппликатуры нет, показываем честно, что её
+        // нет: подставлять картинку другой ноты нельзя, это путает
+        return shifted || written;
     }
 
     // Пересчитать аппликатуры всех нот: вызывается при смене сдвига инструмента
