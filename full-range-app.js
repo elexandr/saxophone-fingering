@@ -825,10 +825,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             noteName: noteInfo.displayName,
             displayName: noteInfo.displayName,
             accidental: this.accidentalOf(noteInfo.displayName),
-            fingering: noteInfo.fingering,
-            fingeringBase: noteInfo.fingering ? noteInfo.fingering.replace(/_v\d+\.jpg$/, '') : null,
-            hasFingering: noteInfo.hasFingering,
-            variants: noteInfo.variants || 1,
+            fingering: this.fingeringFor(noteInfo.displayName).fingering,
+            fingeringBase: this.fingeringFor(noteInfo.displayName).fingering ? this.fingeringFor(noteInfo.displayName).fingering.replace(/_v\d+\.jpg$/, '') : null,
+            hasFingering: this.fingeringFor(noteInfo.displayName).hasFingering,
+            variants: this.fingeringFor(noteInfo.displayName).variants || 1,
             currentVariant: 1,
             duration: inherit ? (inherit.duration || 4) : 4,
             dotted: inherit ? Playback.dotCount(inherit.dotted) : 0,
@@ -3174,6 +3174,49 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     
     // Сдвиг инструмента: ноты и аппликатуры остаются на месте, меняется только
     // высота звука. 0 - нота звучит как записана, -12 - на октаву ниже
+    // Аппликатура записанной ноты с учётом сдвига инструмента. Нота на стане
+    // остаётся, но на инструменте со сдвигом её берут другим набором клавиш:
+    // аппликатуру показываем для ноты, которая на этом инструменте звучит
+    // так же, то есть для ноты, сдвинутой в обратную сторону
+    fingeringFor(noteName) {
+        const written = this.getNoteInfoByName(noteName);
+        const semitones = Number(this.instrumentTranspose) || 0;
+
+        if (!semitones || !written) return written;
+
+        const shiftedName = Playback.transposeNoteName(noteName, -semitones);
+        const shifted = shiftedName === noteName ? written : this.getNoteInfoByName(shiftedName);
+
+        // Если для сдвинутой ноты картинки нет, показываем аппликатуру
+        // записанной: пустая карточка хуже, чем привычная аппликатура
+        return (shifted && shifted.hasFingering) ? shifted : written;
+    }
+
+    // Пересчитать аппликатуры всех нот: вызывается при смене сдвига инструмента
+    refreshInstrumentFingerings() {
+        this.notes.forEach(note => {
+            if (note.isRest) return;
+
+            const info = this.fingeringFor(note.noteName);
+            if (!info) return;
+
+            // Имя файла собираем с учётом выбранного варианта: иначе при
+            // пересчёте терялся вариант, выбранный пользователем
+            const base = info.fingering ? info.fingering.replace(/_v\d+\.jpg$/, '') : null;
+            const variants = info.variants || 1;
+            const variant = Math.min(note.currentVariant || 1, variants);
+
+            note.fingeringBase = base;
+            note.fingering = base ? (base + '_v' + variant + '.jpg') : null;
+            note.hasFingering = info.hasFingering;
+            note.variants = variants;
+
+            // Выбранный вариант аппликатуры не сбрасываем: при смене сдвига
+            // количество вариантов может измениться, но выбор пользователя важнее
+        });
+
+        this.updateAllFingerings();
+    }
     setInstrumentTranspose(value) {
         let semitones = Math.round(Number(value));
         if (!Number.isFinite(semitones)) semitones = -12;
@@ -3185,6 +3228,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (input && parseInt(input.value, 10) !== semitones) input.value = semitones;
 
         if (this.melodyPlayer) this.melodyPlayer.setTranspose(semitones);
+
+        // Аппликатуры зависят от сдвига: ноты те же, клавиши другие
+        this.refreshInstrumentFingerings();
 
         this.updateStatus(t('status.instrumentTranspose', { value: semitones }));
         this.scheduleAutosave();

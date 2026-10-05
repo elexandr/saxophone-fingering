@@ -17,6 +17,19 @@
 
     // 'C#4' / 'Db4' -> частота в герцах. A4 = 440 Гц.
     // semitones - сдвиг инструмента: 0 даёт записанную ноту, -12 звучит на октаву ниже
+    // Сдвиг имени ноты на полутоны: C4 при -12 даёт C3.
+    // Нужен для аппликатуры: сдвиг инструмента меняет набор клавиш
+    function transposeNoteName(name, semitones) {
+        var m = NOTE_RE.exec(String(name == null ? '' : name).trim());
+        if (!m) return name;
+
+        var base = SEMITONE[m[1].toUpperCase()];
+        var accidental = m[2] === '#' ? 1 : (m[2] === 'b' ? -1 : 0);
+        var midi = (parseInt(m[3], 10) + 1) * 12 + base + accidental + (Number(semitones) || 0);
+        var names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        return names[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+    }
     function noteToFrequency(name, semitones) {
         var m = NOTE_RE.exec(String(name == null ? '' : name).trim());
         if (!m) return null;
@@ -419,6 +432,7 @@
 
     return {
         noteToFrequency: noteToFrequency,
+        transposeNoteName: transposeNoteName,
         dotCount: dotCount,
         beatsFor: beatsFor,
         secondsFor: secondsFor,
