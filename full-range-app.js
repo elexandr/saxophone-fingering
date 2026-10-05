@@ -1345,7 +1345,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (!this.melodyPlayer || this.melodyPlayer.playing) return false;
         if (!Playback.audioSupported()) return false;
         
-        const frequency = Playback.noteToFrequency(element.noteName || element.displayName, this.instrumentTranspose);
+        const frequency = Playback.noteToFrequency(element.noteName || element.displayName, this.soundSemitones());
         if (!frequency) return false;
         
         const ctx = this.melodyPlayer.ensureContext();
@@ -3178,9 +3178,17 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // остаётся, но на инструменте со сдвигом её берут другим набором клавиш:
     // аппликатуру показываем для ноты, которая на этом инструменте звучит
     // так же, то есть для ноты, сдвинутой в обратную сторону
+    // Сдвиг звука в полутонах. Отсчёт ведётся от значения по умолчанию (-12):
+    // при нём нота звучит ровно так, как подписана, и смена значения сдвигает
+    // звук относительно этой точки, а не от нуля
+    soundSemitones() {
+        return (Number(this.instrumentTranspose) || 0) + 12;
+    }
     fingeringFor(noteName) {
         const written = this.getNoteInfoByName(noteName);
-        const semitones = Number(this.instrumentTranspose) || 0;
+        // Считаем от того же сдвига, что и звук: при точке отсчёта нота
+        // берётся привычной аппликатурой, а смена значения её меняет
+        const semitones = this.soundSemitones();
 
         if (!semitones || !written) return written;
 
@@ -3227,7 +3235,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const input = document.getElementById('instrument-transpose');
         if (input && parseInt(input.value, 10) !== semitones) input.value = semitones;
 
-        if (this.melodyPlayer) this.melodyPlayer.setTranspose(semitones);
+        if (this.melodyPlayer) this.melodyPlayer.setTranspose(this.soundSemitones());
 
         // Аппликатуры зависят от сдвига: ноты те же, клавиши другие
         this.refreshInstrumentFingerings();
@@ -3236,7 +3244,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const example = document.getElementById('instrument-example');
         if (example) {
             example.textContent = t('instrument.example', {
-                sounding: Playback.transposeNoteName('C4', semitones)
+                sounding: Playback.transposeNoteName('C4', this.soundSemitones())
             });
         }
 
@@ -3480,7 +3488,7 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.setTempo(staffManager.tempo + 5);
     });
     // Сдвиг инструмента применяем сразу при запуске: и плееру, и строке-примеру
-    staffManager.melodyPlayer.setTranspose(staffManager.instrumentTranspose);
+    staffManager.melodyPlayer.setTranspose(staffManager.soundSemitones());
     staffManager.setInstrumentTranspose(staffManager.instrumentTranspose);
     // Сохранение/загрузка
     document.getElementById('btn-save').addEventListener('click', () => {
@@ -3592,7 +3600,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Узлы подсветки готовим заранее: в кадре не должно быть поиска по документу
             staffManager.prepareHighlightNodes(sequence);
-            staffManager.melodyPlayer.setTranspose(staffManager.instrumentTranspose);
+            staffManager.melodyPlayer.setTranspose(staffManager.soundSemitones());
 
             const started = staffManager.melodyPlayer.play(sequence, staffManager.tempo, {
                 onElement: (index, element) => {
