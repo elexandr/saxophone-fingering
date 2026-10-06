@@ -3212,9 +3212,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
     fingeringFor(noteName) {
         const written = this.getNoteInfoByName(noteName);
-        // Связь включена: картинка это аппликатура самой ноты стана.
-        // Выключена: картинка той ноты, что на инструменте звучит как приложение
-        const shift = this.fingeringLinked ? 0 : (this.appSoundShift - this.saxShift);
+        // Аппликатура всегда та, которой этот звук берётся на инструменте:
+        // сдвиг приложения минус сдвиг инструмента. Флажок подписей на неё
+        // не влияет - он отвечает только за названия нот
+        const shift = (Number(this.appSoundShift) || 0) - (Number(this.saxShift) || 0);
 
         if (!shift || !written) return written;
 
