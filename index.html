@@ -9,7 +9,7 @@
     <meta name="referrer" content="no-referrer">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <title data-i18n="app.docTitle">Saxophone Fingering Assistant</title>
-    <link rel="stylesheet" href="simple-styles.css?v=1.8.60">
+    <link rel="stylesheet" href="simple-styles.css?v=1.8.61">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -218,12 +218,12 @@
                         <i class="fas fa-saxophone"></i> <span data-i18n="panel.presets">Инструменты</span>
                     </h4>
                     <div class="control-group preset-row">
-                        <button type="button" class="btn-preset" data-preset="soprano" data-app-shift="-2" data-sax-shift="-2" data-linked="1"><span data-i18n="instrument.soprano">Сопрано</span> &minus;2</button>
-                        <button type="button" class="btn-preset" data-preset="alto" data-app-shift="-9" data-sax-shift="-9" data-linked="1"><span data-i18n="instrument.alto">Альт</span> &minus;9</button>
-                        <button type="button" class="btn-preset" data-preset="tenor" data-app-shift="-14" data-sax-shift="-14" data-linked="1"><span data-i18n="instrument.tenor">Тенор</span> &minus;14</button>
-                        <button type="button" class="btn-preset" data-preset="baritone" data-app-shift="-21" data-sax-shift="-21" data-linked="1"><span data-i18n="instrument.baritone">Баритон</span> &minus;21</button>
-                        <button type="button" class="btn-preset" data-preset="guitar" data-app-shift="-12" data-sax-shift="-12" data-linked="0"><span data-i18n="instrument.guitar">Гитара</span> &minus;12</button>
-                        <button type="button" class="btn-preset" data-preset="piano" data-app-shift="0" data-sax-shift="0" data-linked="0"><span data-i18n="instrument.piano">Пианино</span> 0</button>
+                        <button type="button" class="btn-preset" data-preset="soprano" data-app-shift="-2" data-sax-shift="-2" data-sounding="0"><span data-i18n="instrument.soprano">Сопрано</span> &minus;2</button>
+                        <button type="button" class="btn-preset" data-preset="alto" data-app-shift="-9" data-sax-shift="-9" data-sounding="0"><span data-i18n="instrument.alto">Альт</span> &minus;9</button>
+                        <button type="button" class="btn-preset" data-preset="tenor" data-app-shift="-14" data-sax-shift="-14" data-sounding="0"><span data-i18n="instrument.tenor">Тенор</span> &minus;14</button>
+                        <button type="button" class="btn-preset" data-preset="baritone" data-app-shift="-21" data-sax-shift="-21" data-sounding="0"><span data-i18n="instrument.baritone">Баритон</span> &minus;21</button>
+                        <button type="button" class="btn-preset" data-preset="guitar" data-app-shift="-12" data-sax-shift="-12" data-sounding="1"><span data-i18n="instrument.guitar">Гитара</span> &minus;12</button>
+                        <button type="button" class="btn-preset" data-preset="piano" data-app-shift="0" data-sax-shift="0" data-sounding="0"><span data-i18n="instrument.piano">Пианино</span> 0</button>
                     </div>
 
                     <h4 class="control-subtitle fine-head" id="fine-toggle" role="button" tabindex="0"
@@ -252,7 +252,7 @@
                         </div>
                         <label class="checkbox-label" for="fingering-linked" data-i18n-title="fine.linked.hint">
                             <input type="checkbox" id="fingering-linked">
-                            <i class="fas fa-link"></i> <span data-i18n="fine.linked">Показывать написанные ноты</span>
+                            <i class="fas fa-link"></i> <span data-i18n="fine.linked">Показывать звучащие ноты</span>
                         </label>
                         <p class="instrument-example" id="instrument-example"></p>
                     </div>
@@ -332,7 +332,7 @@
             <div class="status-bar">
                 <span id="status-message" data-i18n="status.ready">Готов к работе. Кликните на маркер позиции, чтобы добавить ноту.</span>
                 <span id="cache-status" class="cache-status"></span>
-                <span class="app-version">v1.8.60</span>
+                <span class="app-version">v1.8.61</span>
             </div>
         </footer>
     </div>
@@ -483,12 +483,12 @@
     </div>
 
     <!-- Скрипты -->
-    <script src="i18n.js?v=1.8.60"></script>
-    <script src="note-symbols.js?v=1.8.60"></script>
-    <script src="playback.js?v=1.8.60"></script>
-    <script src="image-cache.js?v=1.8.60"></script>
-    <script src="midi.js?v=1.8.60"></script>
-    <script src="full-range-app.js?v=1.8.60"></script>
+    <script src="i18n.js?v=1.8.61"></script>
+    <script src="note-symbols.js?v=1.8.61"></script>
+    <script src="playback.js?v=1.8.61"></script>
+    <script src="image-cache.js?v=1.8.61"></script>
+    <script src="midi.js?v=1.8.61"></script>
+    <script src="full-range-app.js?v=1.8.61"></script>
     <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){

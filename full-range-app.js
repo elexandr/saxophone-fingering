@@ -59,8 +59,9 @@ class FullRangeStaffManager {
         this.appSoundShift = -12;
         // Сдвиг звука инструмента: насколько саксофон звучит выше или ниже аппликатуры
         this.saxShift = -12;
-        // Связь аппликатуры со станом: включена - картинка по ноте стана
-        this.fingeringLinked = false;
+        // Показывать звучащие ноты: включено - подписи звучащих нот,
+        // выключено - написанные (истина тут у пианино)
+        this.soundingNames = false;
         this.metronome = false;
         this.metronomeVolume = 0.6;
         this.countIn = false; // Играть по кругу
@@ -2947,7 +2948,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 metronomeVolume: this.metronomeVolume,
                 appSoundShift: this.appSoundShift,
                 saxShift: this.saxShift,
-                fingeringLinked: this.fingeringLinked,
+                soundingNames: this.soundingNames,
                 countIn: this.countIn,
                 displayMode: this.displayMode,
                 tempo: this.tempo,
@@ -3060,7 +3061,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 metronomeVolume: this.metronomeVolume,
                 appSoundShift: this.appSoundShift,
                 saxShift: this.saxShift,
-                fingeringLinked: this.fingeringLinked,
+                soundingNames: this.soundingNames,
                 countIn: this.countIn,
                 displayMode: this.displayMode
             }
@@ -3153,8 +3154,13 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             this.saxShift = this.clampShift(settings.saxShift);
         }
 
-        if (settings && settings.fingeringLinked !== undefined) {
-            this.fingeringLinked = !!settings.fingeringLinked;
+        if (settings && settings.soundingNames !== undefined) {
+            this.soundingNames = !!settings.soundingNames;
+        }
+
+        // Файлы прежних версий хранили обратный флаг: читаем его наоборот
+        if (settings && settings.soundingNames === undefined && settings.fingeringLinked !== undefined) {
+            this.soundingNames = !settings.fingeringLinked;
         }
         if (!settings) return;
         
@@ -3263,8 +3269,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // поэтому имена показываем в звучащей октаве. Связь включена - показываем
     // стандартные саксофонные имена, как их читает саксофонист
     displayShift() {
-        // Связь выключена: нотоносец связан со звуком, имена идут в звучащей октаве
-        return this.fingeringLinked ? 0 : this.soundSemitones();
+        // Включено - подписи звучащих нот, выключено - написанные
+        return this.soundingNames ? this.soundSemitones() : 0;
     }
 
     displayNoteName(noteName) {
@@ -3300,11 +3306,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
 
     // Связь аппликатуры со станом
-    setFingeringLinked(value) {
-        this.fingeringLinked = !!value;
+    setSoundingNames(value) {
+        this.soundingNames = !!value;
         this.afterShiftChange();
 
-        return this.fingeringLinked;
+        return this.soundingNames;
     }
 
     clampShift(value) {
@@ -3353,7 +3359,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }
 
         const linked = document.getElementById('fingering-linked');
-        if (linked) linked.checked = !!this.fingeringLinked;
+        if (linked) linked.checked = !!this.soundingNames;
     }
 
     // Подсветка пресета, который совпал с тонкой настройкой
@@ -3361,7 +3367,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         document.querySelectorAll('.btn-preset').forEach(button => {
             const same = Number(button.getAttribute('data-app-shift')) === this.appSoundShift &&
                 Number(button.getAttribute('data-sax-shift')) === this.saxShift &&
-                (button.getAttribute('data-linked') === '1') === !!this.fingeringLinked;
+                (button.getAttribute('data-sounding') === '1') === !!this.soundingNames;
 
             button.classList.toggle('active', same);
         });
@@ -3373,7 +3379,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
         this.appSoundShift = this.clampShift(button.getAttribute('data-app-shift'));
         this.saxShift = this.clampShift(button.getAttribute('data-sax-shift'));
-        this.fingeringLinked = button.getAttribute('data-linked') === '1';
+        this.soundingNames = button.getAttribute('data-sounding') === '1';
 
         this.afterShiftChange();
     }
@@ -3655,7 +3661,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('fingering-linked').addEventListener('change', (e) => {
-        staffManager.setFingeringLinked(e.target.checked);
+        staffManager.setSoundingNames(e.target.checked);
     });
 
     document.querySelectorAll('.btn-preset').forEach(button => {
