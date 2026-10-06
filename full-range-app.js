@@ -3271,7 +3271,12 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     displayShift() {
         // Звучащие подписи идут ровно за звуком приложения, чтобы подпись
         // всегда совпадала с тем, что слышно
-        return this.soundingNames ? this.soundSemitones() : 0;
+        if (this.soundingNames) return this.soundSemitones();
+
+        // Написанные подписи - стандартная запись: на октаву выше нотных имён
+        // приложения. Так у гитары написанная C5 звучит как C4, а у пианино
+        // написанная и звучащая совпадают
+        return 12;
     }
 
     displayNoteName(noteName) {
