@@ -3269,8 +3269,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // поэтому имена показываем в звучащей октаве. Связь включена - показываем
     // стандартные саксофонные имена, как их читает саксофонист
     displayShift() {
-        // Звучащие подписи - это написанная нота плюс сдвиг звука приложения
-        return this.soundingNames ? (Number(this.appSoundShift) || 0) : 0;
+        // Звучащие подписи идут ровно за звуком приложения, чтобы подпись
+        // всегда совпадала с тем, что слышно
+        return this.soundingNames ? this.soundSemitones() : 0;
     }
 
     displayNoteName(noteName) {
