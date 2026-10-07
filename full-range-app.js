@@ -3,11 +3,15 @@
 
 // Геометрия стана: те же числа, что в loadPositionsFromJSON и drawFullStaff
 const STAFF_LINE_SPACING = 20;
-const STAFF_MAIN_TOP = 160;
-const STAFF_MAIN_BOTTOM = STAFF_MAIN_TOP + 4 * STAFF_LINE_SPACING; // 240
-const STAFF_MIDDLE_LINE_Y = STAFF_MAIN_TOP + 2 * STAFF_LINE_SPACING; // 200
-const STAFF_TOP_LEDGER = STAFF_MAIN_TOP - 4 * STAFF_LINE_SPACING; // 80
-const STAFF_BOTTOM_LEDGER = STAFF_MAIN_BOTTOM + 4 * STAFF_LINE_SPACING; // 320
+// Верхняя линейка стана: при ней нота C4 попадает на первую добавочную снизу,
+// A4 - во вторую полость, A5 - на первую добавочную сверху
+const STAFF_MAIN_TOP = 90;
+const STAFF_MAIN_BOTTOM = STAFF_MAIN_TOP + 4 * STAFF_LINE_SPACING; // 170
+const STAFF_MIDDLE_LINE_Y = STAFF_MAIN_TOP + 2 * STAFF_LINE_SPACING; // 130
+const STAFF_UPPER_LEDGER_COUNT = 4;
+const STAFF_LOWER_LEDGER_COUNT = 8; // хватает, чтобы у C2 была своя линейка
+const STAFF_TOP_LEDGER = STAFF_MAIN_TOP - STAFF_UPPER_LEDGER_COUNT * STAFF_LINE_SPACING; // 10
+const STAFF_BOTTOM_LEDGER = STAFF_MAIN_BOTTOM + STAFF_LOWER_LEDGER_COUNT * STAFF_LINE_SPACING; // 330
 const STAFF_CLEF_WIDTH = 72; // место под скрипичный ключ и отступ до первой ноты
 // Знак ноты рисуется в рамке 60px по центру ноты, то есть на 30px в каждую сторону
 const GLYPH_HALF_WIDTH = 30;
@@ -93,7 +97,7 @@ class FullRangeStaffManager {
         // Базовые координаты Y для нотного стана
         // 4 дополнительные линии снизу, 5 основных, 4 дополнительные сверху
         // В музыке: повышение идет снизу вверх, поэтому C2 (низ) должна быть внизу
-        const baseY = 340; // C2 (самая низкая) внизу
+        const baseY = STAFF_BOTTOM_LEDGER + 10; // C2 (самая низкая) внизу
         const lineSpacing = STAFF_LINE_SPACING;
         const verticalOffset = 0; // Сдвиг вверх убран: сверху нужно место под окошки длительности
         const noteOffset = lineSpacing; // Сдвиг нот ниже линеек на расстояние одного промежутка
@@ -678,9 +682,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     drawStaffLines(staff) {
         const verticalOffset = 0; // Стан не сдвигаем: сверху место под окошки длительности
         
-        // 4 дополнительные линии сверху (A5 и выше)
-        for (let i = 0; i < 4; i++) {
-            const y = 10 + i * 20 - verticalOffset;
+        // Дополнительные линии сверху (A5 и выше)
+        for (let i = 0; i < STAFF_UPPER_LEDGER_COUNT; i++) {
+            const y = STAFF_MAIN_TOP - (i + 1) * STAFF_LINE_SPACING - verticalOffset;
             const line = document.createElement('div');
             line.className = 'staff-line';
             line.style.top = y + 'px';
@@ -688,18 +692,18 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             staff.appendChild(line);
         }
         
-        // 5 основных линий
+        // Пять основных линий
         for (let i = 0; i < 5; i++) {
-            const y = 90 + i * 20 - verticalOffset;
+            const y = STAFF_MAIN_TOP + i * STAFF_LINE_SPACING - verticalOffset;
             const line = document.createElement('div');
             line.className = 'staff-line';
             line.style.top = y + 'px';
             staff.appendChild(line);
         }
         
-        // Дополнительные линии снизу: их восемь, чтобы C2 имела свою линию
-        for (let i = 0; i < 8; i++) {
-            const y = 190 + i * 20 - verticalOffset;
+        // Дополнительные линии снизу
+        for (let i = 0; i < STAFF_LOWER_LEDGER_COUNT; i++) {
+            const y = STAFF_MAIN_BOTTOM + (i + 1) * STAFF_LINE_SPACING - verticalOffset;
             const line = document.createElement('div');
             line.className = 'staff-line';
             line.style.top = y + 'px';
