@@ -680,7 +680,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
         // 4 дополнительные линии сверху (A5 и выше)
         for (let i = 0; i < 4; i++) {
-            const y = 80 + i * 20 - verticalOffset;
+            const y = 10 + i * 20 - verticalOffset;
             const line = document.createElement('div');
             line.className = 'staff-line';
             line.style.top = y + 'px';
@@ -690,16 +690,16 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
         // 5 основных линий
         for (let i = 0; i < 5; i++) {
-            const y = 160 + i * 20 - verticalOffset;
+            const y = 90 + i * 20 - verticalOffset;
             const line = document.createElement('div');
             line.className = 'staff-line';
             line.style.top = y + 'px';
             staff.appendChild(line);
         }
         
-        // 4 дополнительные линии снизу (C2 и ниже)
-        for (let i = 0; i < 4; i++) {
-            const y = 260 + i * 20 - verticalOffset;
+        // Дополнительные линии снизу: их восемь, чтобы C2 имела свою линию
+        for (let i = 0; i < 8; i++) {
+            const y = 190 + i * 20 - verticalOffset;
             const line = document.createElement('div');
             line.className = 'staff-line';
             line.style.top = y + 'px';
