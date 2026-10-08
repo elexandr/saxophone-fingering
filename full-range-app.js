@@ -1,5 +1,5 @@
 // Saxophone Fingering Assistant - Full Range Version
-// Использует полный диапазон C2 - A5 из JSON файла
+// Использует полный диапазон C2 - F#6 из JSON файла
 
 // Геометрия стана: те же числа, что в loadPositionsFromJSON и drawFullStaff
 const STAFF_LINE_SPACING = 20;
@@ -104,7 +104,7 @@ class FullRangeStaffManager {
         
         // Создаем позиции на основе данных из JSON
         // position_id от 1 до 27
-        for (let i = 1; i <= 27; i++) {
+        for (let i = 1; i <= 32; i++) {
             // Вычисляем Y координату на основе position_id
             // В JSON: y_half_steps от -1 до 25
             // C2 (position_id 1) должна быть внизу, A5 (position_id 27) вверху
@@ -159,7 +159,12 @@ class FullRangeStaffManager {
             24: { baseNote: 'E', octave: 5 },
             25: { baseNote: 'F', octave: 5 },
             26: { baseNote: 'G', octave: 5 },
-            27: { baseNote: 'A', octave: 5 }
+            27: { baseNote: 'A', octave: 5 },
+            28: { baseNote: 'B', octave: 5 },
+            29: { baseNote: 'C', octave: 6 },
+            30: { baseNote: 'D', octave: 6 },
+            31: { baseNote: 'E', octave: 6 },
+            32: { baseNote: 'F', octave: 6 }
         };
         
         const baseInfo = baseNoteMap[positionId] || { baseNote: '?', octave: 0 };
@@ -171,28 +176,38 @@ class FullRangeStaffManager {
         // Определяем аппликатуру на основе данных из JSON
         // Исправляем названия файлов согласно JSON
         const fingeringMap = {
-            6: { fingering: '045_A2_v1.jpg', hasFingering: true, variants: 1 },
-            7: { fingering: '047_B2_v1.jpg', hasFingering: true, variants: 1 },
-            8: { fingering: '048_C3_v1.jpg', hasFingering: true, variants: 1 },
-            9: { fingering: '050_D3_v1.jpg', hasFingering: true, variants: 1 },
-            10: { fingering: '052_E3_v1.jpg', hasFingering: true, variants: 1 },
-            11: { fingering: '053_F3_v1.jpg', hasFingering: true, variants: 1 },
-            12: { fingering: '055_G3_v1.jpg', hasFingering: true, variants: 1 },
-            13: { fingering: '057_A3_v1.jpg', hasFingering: true, variants: 1 }, // В JSON только 1 вариант для A3
-            14: { fingering: '059_B3_v1.jpg', hasFingering: true, variants: 1 }, // В JSON только 1 вариант для B3
-            15: { fingering: '060_C4_v1.jpg', hasFingering: true, variants: 2 }, // В JSON 2 варианта для C4
+            1: { fingering: null, hasFingering: false, variants: 1 },
+            2: { fingering: null, hasFingering: false, variants: 1 },
+            3: { fingering: null, hasFingering: false, variants: 1 },
+            4: { fingering: null, hasFingering: false, variants: 1 },
+            5: { fingering: null, hasFingering: false, variants: 1 },
+            6: { fingering: null, hasFingering: false, variants: 1 },
+            7: { fingering: null, hasFingering: false, variants: 1 },
+            8: { fingering: null, hasFingering: false, variants: 1 },
+            9: { fingering: null, hasFingering: false, variants: 1 },
+            10: { fingering: null, hasFingering: false, variants: 1 },
+            11: { fingering: null, hasFingering: false, variants: 1 },
+            12: { fingering: null, hasFingering: false, variants: 1 },
+            13: { fingering: '057_A3_v1.jpg', hasFingering: true, variants: 1 },
+            14: { fingering: '059_B3_v1.jpg', hasFingering: true, variants: 1 },
+            15: { fingering: '060_C4_v1.jpg', hasFingering: true, variants: 1 },
             16: { fingering: '062_D4_v1.jpg', hasFingering: true, variants: 1 },
             17: { fingering: '064_E4_v1.jpg', hasFingering: true, variants: 1 },
             18: { fingering: '065_F4_v1.jpg', hasFingering: true, variants: 1 },
             19: { fingering: '067_G4_v1.jpg', hasFingering: true, variants: 1 },
-            20: { fingering: '069_A4_v1.jpg', hasFingering: true, variants: 1 }, // В JSON только 1 вариант для A4
-            21: { fingering: '071_B4_v1.jpg', hasFingering: true, variants: 1 }, // В JSON только 1 вариант для B4
-            22: { fingering: '072_C5_v1.jpg', hasFingering: true, variants: 2 }, // В JSON 2 варианта для C5
+            20: { fingering: '069_A4_v1.jpg', hasFingering: true, variants: 1 },
+            21: { fingering: '071_B4_v1.jpg', hasFingering: true, variants: 1 },
+            22: { fingering: '072_C5_v1.jpg', hasFingering: true, variants: 2 },
             23: { fingering: '074_D5_v1.jpg', hasFingering: true, variants: 1 },
-            24: { fingering: '076_E5_v1.jpg', hasFingering: true, variants: 2 }, // В JSON 2 варианта для E5
-            25: { fingering: '077_F5_v1.jpg', hasFingering: true, variants: 2 }, // В JSON 2 варианта для F5
-            26: { fingering: null, hasFingering: false, variants: 1 },
-            27: { fingering: null, hasFingering: false, variants: 1 }
+            24: { fingering: '076_E5_v1.jpg', hasFingering: true, variants: 1 },
+            25: { fingering: '077_F5_v1.jpg', hasFingering: true, variants: 1 },
+            26: { fingering: '079_G5_v1.jpg', hasFingering: true, variants: 1 },
+            27: { fingering: '081_A5_v1.jpg', hasFingering: true, variants: 1 },
+            28: { fingering: '083_B5_v1.jpg', hasFingering: true, variants: 1 },
+            29: { fingering: '084_C6_v1.jpg', hasFingering: true, variants: 2 },
+            30: { fingering: '086_D6_v1.jpg', hasFingering: true, variants: 1 },
+            31: { fingering: '088_E6_v1.jpg', hasFingering: true, variants: 2 },
+            32: { fingering: '089_F6_v1.jpg', hasFingering: true, variants: 2 }
         };
         
         const fingeringInfo = fingeringMap[positionId] || { fingering: null, hasFingering: false, variants: 1 };
@@ -2271,79 +2286,91 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Упрощенное сопоставление на основе данных из JSON.
         // Карта строится один раз: она же используется для списка файлов аппликатур.
         const noteMap = this._noteMap || (this._noteMap = {
-            // C2 - B2
             'C2': { positionId: 1, displayName: 'C2', hasFingering: false, fingering: null, variants: 1 },
             'C#2': { positionId: 1, displayName: 'C#2', hasFingering: false, fingering: null, variants: 1 },
-            'Db2': { positionId: 2, displayName: 'Db2', hasFingering: false, fingering: null, variants: 1 },
+            'Cb2': { positionId: 1, displayName: 'Cb2', hasFingering: false, fingering: null, variants: 1 },
             'D2': { positionId: 2, displayName: 'D2', hasFingering: false, fingering: null, variants: 1 },
             'D#2': { positionId: 2, displayName: 'D#2', hasFingering: false, fingering: null, variants: 1 },
-            'Eb2': { positionId: 3, displayName: 'Eb2', hasFingering: false, fingering: null, variants: 1 },
+            'Db2': { positionId: 2, displayName: 'Db2', hasFingering: false, fingering: null, variants: 1 },
             'E2': { positionId: 3, displayName: 'E2', hasFingering: false, fingering: null, variants: 1 },
+            'Eb2': { positionId: 3, displayName: 'Eb2', hasFingering: false, fingering: null, variants: 1 },
             'F2': { positionId: 4, displayName: 'F2', hasFingering: false, fingering: null, variants: 1 },
             'F#2': { positionId: 4, displayName: 'F#2', hasFingering: false, fingering: null, variants: 1 },
-            'Gb2': { positionId: 5, displayName: 'Gb2', hasFingering: false, fingering: null, variants: 1 },
             'G2': { positionId: 5, displayName: 'G2', hasFingering: false, fingering: null, variants: 1 },
             'G#2': { positionId: 5, displayName: 'G#2', hasFingering: false, fingering: null, variants: 1 },
+            'Gb2': { positionId: 5, displayName: 'Gb2', hasFingering: false, fingering: null, variants: 1 },
+            'A2': { positionId: 6, displayName: 'A2', hasFingering: false, fingering: null, variants: 1 },
+            'A#2': { positionId: 6, displayName: 'A#2', hasFingering: false, fingering: null, variants: 1 },
             'Ab2': { positionId: 6, displayName: 'Ab2', hasFingering: false, fingering: null, variants: 1 },
-            'A2': { positionId: 6, displayName: 'A2', hasFingering: true, fingering: '045_A2_v1.jpg', variants: 1 },
-            'A#2': { positionId: 6, displayName: 'A#2', hasFingering: true, fingering: '046_A#2_Bb2_v1.jpg', variants: 1 },
-            'Bb2': { positionId: 7, displayName: 'Bb2', hasFingering: true, fingering: '046_A#2_Bb2_v1.jpg', variants: 1 },
-            'B2': { positionId: 7, displayName: 'B2', hasFingering: true, fingering: '047_B2_v1.jpg', variants: 1 },
-            
-            // C3 - B3
-            'C3': { positionId: 8, displayName: 'C3', hasFingering: true, fingering: '048_C3_v1.jpg', variants: 1 },
-            'C#3': { positionId: 8, displayName: 'C#3', hasFingering: true, fingering: '049_C#3_Db3_v1.jpg', variants: 1 },
-            'Db3': { positionId: 9, displayName: 'Db3', hasFingering: true, fingering: '049_C#3_Db3_v1.jpg', variants: 1 },
-            'D3': { positionId: 9, displayName: 'D3', hasFingering: true, fingering: '050_D3_v1.jpg', variants: 1 },
-            'D#3': { positionId: 9, displayName: 'D#3', hasFingering: true, fingering: '051_D#3_Eb3_v1.jpg', variants: 1 },
-            'Eb3': { positionId: 10, displayName: 'Eb3', hasFingering: true, fingering: '051_D#3_Eb3_v1.jpg', variants: 1 },
-            'E3': { positionId: 10, displayName: 'E3', hasFingering: true, fingering: '052_E3_v1.jpg', variants: 1 },
-            'F3': { positionId: 11, displayName: 'F3', hasFingering: true, fingering: '053_F3_v1.jpg', variants: 1 },
-            'F#3': { positionId: 11, displayName: 'F#3', hasFingering: true, fingering: '054_F#3_Gb3_v1.jpg', variants: 1 },
-            'Gb3': { positionId: 12, displayName: 'Gb3', hasFingering: true, fingering: '054_F#3_Gb3_v1.jpg', variants: 1 },
-            'G3': { positionId: 12, displayName: 'G3', hasFingering: true, fingering: '055_G3_v1.jpg', variants: 1 },
-            'G#3': { positionId: 12, displayName: 'G#3', hasFingering: true, fingering: '056_G#3_Ab3_v1.jpg', variants: 1 },
-            'Ab3': { positionId: 13, displayName: 'Ab3', hasFingering: true, fingering: '056_G#3_Ab3_v1.jpg', variants: 1 },
+            'B2': { positionId: 7, displayName: 'B2', hasFingering: false, fingering: null, variants: 1 },
+            'Bb2': { positionId: 7, displayName: 'Bb2', hasFingering: false, fingering: null, variants: 1 },
+            'C3': { positionId: 8, displayName: 'C3', hasFingering: false, fingering: null, variants: 1 },
+            'C#3': { positionId: 8, displayName: 'C#3', hasFingering: false, fingering: null, variants: 1 },
+            'Cb3': { positionId: 8, displayName: 'Cb3', hasFingering: false, fingering: null, variants: 1 },
+            'D3': { positionId: 9, displayName: 'D3', hasFingering: false, fingering: null, variants: 1 },
+            'D#3': { positionId: 9, displayName: 'D#3', hasFingering: false, fingering: null, variants: 1 },
+            'Db3': { positionId: 9, displayName: 'Db3', hasFingering: false, fingering: null, variants: 1 },
+            'E3': { positionId: 10, displayName: 'E3', hasFingering: false, fingering: null, variants: 1 },
+            'Eb3': { positionId: 10, displayName: 'Eb3', hasFingering: false, fingering: null, variants: 1 },
+            'F3': { positionId: 11, displayName: 'F3', hasFingering: false, fingering: null, variants: 1 },
+            'F#3': { positionId: 11, displayName: 'F#3', hasFingering: false, fingering: null, variants: 1 },
+            'G3': { positionId: 12, displayName: 'G3', hasFingering: false, fingering: null, variants: 1 },
+            'G#3': { positionId: 12, displayName: 'G#3', hasFingering: false, fingering: null, variants: 1 },
+            'Gb3': { positionId: 12, displayName: 'Gb3', hasFingering: false, fingering: null, variants: 1 },
             'A3': { positionId: 13, displayName: 'A3', hasFingering: true, fingering: '057_A3_v1.jpg', variants: 1 },
-            'A#3': { positionId: 13, displayName: 'A#3', hasFingering: true, fingering: '058_A#3_Bb3_v1.jpg', variants: 4 },
-            'Bb3': { positionId: 14, displayName: 'Bb3', hasFingering: true, fingering: '058_A#3_Bb3_v1.jpg', variants: 4 },
+            'A#3': { positionId: 13, displayName: 'A#3', hasFingering: true, fingering: '058_A#3_Bb3_v1.jpg', variants: 1 },
+            'Ab3': { positionId: 13, displayName: 'Ab3', hasFingering: false, fingering: null, variants: 1 },
             'B3': { positionId: 14, displayName: 'B3', hasFingering: true, fingering: '059_B3_v1.jpg', variants: 1 },
-            
-            // C4 - B4
-            'C4': { positionId: 15, displayName: 'C4', hasFingering: true, fingering: '060_C4_v1.jpg', variants: 2 },
+            'Bb3': { positionId: 14, displayName: 'Bb3', hasFingering: true, fingering: '058_A#3_Bb3_v1.jpg', variants: 1 },
+            'C4': { positionId: 15, displayName: 'C4', hasFingering: true, fingering: '060_C4_v1.jpg', variants: 1 },
             'C#4': { positionId: 15, displayName: 'C#4', hasFingering: true, fingering: '061_C#4_Db4_v1.jpg', variants: 1 },
-            'Db4': { positionId: 16, displayName: 'Db4', hasFingering: true, fingering: '061_C#4_Db4_v1.jpg', variants: 1 },
+            'Cb4': { positionId: 15, displayName: 'Cb4', hasFingering: false, fingering: null, variants: 1 },
             'D4': { positionId: 16, displayName: 'D4', hasFingering: true, fingering: '062_D4_v1.jpg', variants: 1 },
             'D#4': { positionId: 16, displayName: 'D#4', hasFingering: true, fingering: '063_D#4_Eb4_v1.jpg', variants: 1 },
-            'Eb4': { positionId: 17, displayName: 'Eb4', hasFingering: true, fingering: '063_D#4_Eb4_v1.jpg', variants: 1 },
+            'Db4': { positionId: 16, displayName: 'Db4', hasFingering: true, fingering: '061_C#4_Db4_v1.jpg', variants: 1 },
             'E4': { positionId: 17, displayName: 'E4', hasFingering: true, fingering: '064_E4_v1.jpg', variants: 1 },
+            'Eb4': { positionId: 17, displayName: 'Eb4', hasFingering: true, fingering: '063_D#4_Eb4_v1.jpg', variants: 1 },
             'F4': { positionId: 18, displayName: 'F4', hasFingering: true, fingering: '065_F4_v1.jpg', variants: 1 },
             'F#4': { positionId: 18, displayName: 'F#4', hasFingering: true, fingering: '066_F#4_Gb4_v1.jpg', variants: 1 },
-            'Gb4': { positionId: 19, displayName: 'Gb4', hasFingering: true, fingering: '066_F#4_Gb4_v1.jpg', variants: 1 },
             'G4': { positionId: 19, displayName: 'G4', hasFingering: true, fingering: '067_G4_v1.jpg', variants: 1 },
             'G#4': { positionId: 19, displayName: 'G#4', hasFingering: true, fingering: '068_G#4_Ab4_v1.jpg', variants: 1 },
-            'Ab4': { positionId: 20, displayName: 'Ab4', hasFingering: true, fingering: '068_G#4_Ab4_v1.jpg', variants: 1 },
+            'Gb4': { positionId: 19, displayName: 'Gb4', hasFingering: true, fingering: '066_F#4_Gb4_v1.jpg', variants: 1 },
             'A4': { positionId: 20, displayName: 'A4', hasFingering: true, fingering: '069_A4_v1.jpg', variants: 1 },
             'A#4': { positionId: 20, displayName: 'A#4', hasFingering: true, fingering: '070_A#4_Bb4_v1.jpg', variants: 4 },
-            'Bb4': { positionId: 21, displayName: 'Bb4', hasFingering: true, fingering: '070_A#4_Bb4_v1.jpg', variants: 4 },
+            'Ab4': { positionId: 20, displayName: 'Ab4', hasFingering: true, fingering: '068_G#4_Ab4_v1.jpg', variants: 1 },
             'B4': { positionId: 21, displayName: 'B4', hasFingering: true, fingering: '071_B4_v1.jpg', variants: 1 },
-            
-            // C5 - A5
+            'Bb4': { positionId: 21, displayName: 'Bb4', hasFingering: true, fingering: '070_A#4_Bb4_v1.jpg', variants: 4 },
             'C5': { positionId: 22, displayName: 'C5', hasFingering: true, fingering: '072_C5_v1.jpg', variants: 2 },
             'C#5': { positionId: 22, displayName: 'C#5', hasFingering: true, fingering: '073_C#5_Db5_v1.jpg', variants: 1 },
-            'Db5': { positionId: 23, displayName: 'Db5', hasFingering: true, fingering: '073_C#5_Db5_v1.jpg', variants: 1 },
+            'Cb5': { positionId: 22, displayName: 'Cb5', hasFingering: false, fingering: null, variants: 1 },
             'D5': { positionId: 23, displayName: 'D5', hasFingering: true, fingering: '074_D5_v1.jpg', variants: 1 },
             'D#5': { positionId: 23, displayName: 'D#5', hasFingering: true, fingering: '075_D#5_Eb5_v1.jpg', variants: 1 },
+            'Db5': { positionId: 23, displayName: 'Db5', hasFingering: true, fingering: '073_C#5_Db5_v1.jpg', variants: 1 },
+            'E5': { positionId: 24, displayName: 'E5', hasFingering: true, fingering: '076_E5_v1.jpg', variants: 1 },
             'Eb5': { positionId: 24, displayName: 'Eb5', hasFingering: true, fingering: '075_D#5_Eb5_v1.jpg', variants: 1 },
-            'E5': { positionId: 24, displayName: 'E5', hasFingering: true, fingering: '076_E5_v1.jpg', variants: 2 },
-            'F5': { positionId: 25, displayName: 'F5', hasFingering: true, fingering: '077_F5_v1.jpg', variants: 2 },
+            'F5': { positionId: 25, displayName: 'F5', hasFingering: true, fingering: '077_F5_v1.jpg', variants: 1 },
             'F#5': { positionId: 25, displayName: 'F#5', hasFingering: true, fingering: '078_F#5_Gb5_v1.jpg', variants: 1 },
+            'G5': { positionId: 26, displayName: 'G5', hasFingering: true, fingering: '079_G5_v1.jpg', variants: 1 },
+            'G#5': { positionId: 26, displayName: 'G#5', hasFingering: true, fingering: '080_G#5_Ab5_v1.jpg', variants: 1 },
             'Gb5': { positionId: 26, displayName: 'Gb5', hasFingering: true, fingering: '078_F#5_Gb5_v1.jpg', variants: 1 },
-            'G5': { positionId: 26, displayName: 'G5', hasFingering: false, fingering: null, variants: 1 },
-            'G#5': { positionId: 26, displayName: 'G#5', hasFingering: false, fingering: null, variants: 1 },
-            'Ab5': { positionId: 27, displayName: 'Ab5', hasFingering: false, fingering: null, variants: 1 },
-            'A5': { positionId: 27, displayName: 'A5', hasFingering: false, fingering: null, variants: 1 },
-            'A#5': { positionId: 27, displayName: 'A#5', hasFingering: false, fingering: null, variants: 1 }
+            'A5': { positionId: 27, displayName: 'A5', hasFingering: true, fingering: '081_A5_v1.jpg', variants: 1 },
+            'A#5': { positionId: 27, displayName: 'A#5', hasFingering: true, fingering: '082_A#5_Bb5_v1.jpg', variants: 4 },
+            'Ab5': { positionId: 27, displayName: 'Ab5', hasFingering: true, fingering: '080_G#5_Ab5_v1.jpg', variants: 1 },
+            'B5': { positionId: 28, displayName: 'B5', hasFingering: true, fingering: '083_B5_v1.jpg', variants: 1 },
+            'B#5': { positionId: 28, displayName: 'B#5', hasFingering: false, fingering: null, variants: 1 },
+            'Bb5': { positionId: 28, displayName: 'Bb5', hasFingering: true, fingering: '082_A#5_Bb5_v1.jpg', variants: 4 },
+            'C6': { positionId: 29, displayName: 'C6', hasFingering: true, fingering: '084_C6_v1.jpg', variants: 2 },
+            'C#6': { positionId: 29, displayName: 'C#6', hasFingering: true, fingering: '085_C#6_Db6_v1.jpg', variants: 1 },
+            'Cb6': { positionId: 29, displayName: 'Cb6', hasFingering: false, fingering: null, variants: 1 },
+            'D6': { positionId: 30, displayName: 'D6', hasFingering: true, fingering: '086_D6_v1.jpg', variants: 1 },
+            'D#6': { positionId: 30, displayName: 'D#6', hasFingering: true, fingering: '087_D#6_Eb6_v1.jpg', variants: 1 },
+            'Db6': { positionId: 30, displayName: 'Db6', hasFingering: false, fingering: null, variants: 1 },
+            'E6': { positionId: 31, displayName: 'E6', hasFingering: true, fingering: '088_E6_v1.jpg', variants: 2 },
+            'E#6': { positionId: 31, displayName: 'E#6', hasFingering: false, fingering: null, variants: 1 },
+            'Eb6': { positionId: 31, displayName: 'Eb6', hasFingering: true, fingering: '087_D#6_Eb6_v1.jpg', variants: 1 },
+            'F6': { positionId: 32, displayName: 'F6', hasFingering: true, fingering: '089_F6_v1.jpg', variants: 2 },
+            'F#6': { positionId: 32, displayName: 'F#6', hasFingering: true, fingering: '090_F#6_Gb6_v1.jpg', variants: 1 },
+            'Fb6': { positionId: 32, displayName: 'Fb6', hasFingering: false, fingering: null, variants: 1 }
         });
         
         return noteMap[noteName] || { positionId: 1, displayName: noteName, hasFingering: false, fingering: null, variants: 1 };
@@ -2962,7 +2989,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             },
             timestamp: new Date().toISOString(),
             version: '1.5.0',
-            range: 'C2 - A5'
+            range: 'C2 - F#6'
         };
     }
     
