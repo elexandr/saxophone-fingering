@@ -12,7 +12,9 @@
 
     var DB_NAME = 'saxophone-fingering-assistant';
     var STORE_NAME = 'fingering-images';
-    var DB_VERSION = 1;
+    var DB_VERSION = 2; // поднята: имена картинок те же, а содержимое другое
+    // Версия в адресе обходит и кэш браузера: старые картинки больше не подсунуть
+    var IMAGE_VERSION = '?v=2';
 
     function FingeringImageCache(basePath) {
         this.basePath = basePath || 'fingerings_images/';
@@ -45,9 +47,12 @@
             }
             request.onupgradeneeded = function () {
                 var db = request.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME);
+                // Хранилище кэширует картинки по имени, а имена не менялись:
+                // при обновлении версии старое содержимое надо выбросить
+                if (db.objectStoreNames.contains(STORE_NAME)) {
+                    db.deleteObjectStore(STORE_NAME);
                 }
+                db.createObjectStore(STORE_NAME);
             };
             request.onsuccess = function () { resolve(request.result); };
             request.onerror = function () {
@@ -116,7 +121,7 @@
     // Чтение одного файла рядом со страницей. Именно здесь file:// обычно отвечает отказом.
     // Имя обязательно экранируем: в именах аппликатур встречается #, а он в URL начинает якорь.
     FingeringImageCache.prototype.readFile = function (name) {
-        var url = this.basePath + encodeURIComponent(name);
+        var url = this.basePath + encodeURIComponent(name) + IMAGE_VERSION;
 
         if (typeof fetch === 'function') {
             return fetch(url).then(function (response) {
