@@ -9,7 +9,7 @@ const STAFF_MAIN_TOP = 90;
 const STAFF_MAIN_BOTTOM = STAFF_MAIN_TOP + 4 * STAFF_LINE_SPACING; // 170
 const STAFF_MIDDLE_LINE_Y = STAFF_MAIN_TOP + 2 * STAFF_LINE_SPACING; // 130
 const STAFF_UPPER_LEDGER_COUNT = 4;
-const STAFF_LOWER_LEDGER_COUNT = 8; // хватает, чтобы у C2 была своя линейка
+const STAFF_LOWER_LEDGER_COUNT = 4; // до C3: ниже приложение не работает
 const STAFF_TOP_LEDGER = STAFF_MAIN_TOP - STAFF_UPPER_LEDGER_COUNT * STAFF_LINE_SPACING; // 10
 const STAFF_BOTTOM_LEDGER = STAFF_MAIN_BOTTOM + STAFF_LOWER_LEDGER_COUNT * STAFF_LINE_SPACING; // 330
 const STAFF_CLEF_WIDTH = 72; // место под скрипичный ключ и отступ до первой ноты
@@ -97,7 +97,9 @@ class FullRangeStaffManager {
         // Базовые координаты Y для нотного стана
         // 4 дополнительные линии снизу, 5 основных, 4 дополнительные сверху
         // В музыке: повышение идет снизу вверх, поэтому C2 (низ) должна быть внизу
-        const baseY = STAFF_BOTTOM_LEDGER + 10; // C2 (самая низкая) внизу
+        // Базовая высота фиксирована: положение нот на стане не должно зависеть
+        // от того, сколько добавочных линеек нарисовано
+        const baseY = 340;
         const lineSpacing = STAFF_LINE_SPACING;
         const verticalOffset = 0; // Сдвиг вверх убран: сверху нужно место под окошки длительности
         const noteOffset = lineSpacing; // Сдвиг нот ниже линеек на расстояние одного промежутка
@@ -791,6 +793,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             marker.style.top = (position.y - 25) + 'px';
             marker.style.left = '0'; // Начинаем от левого края
             marker.style.width = '100%'; // Занимаем всю ширину
+            // Ниже C3 приложение не работает, маркеры этих позиций не показываем
+            if (position.id < 8) { marker.style.display = 'none'; }
             marker.setAttribute('data-position-id', position.id);
             marker.setAttribute('title', t('marker.title', { name: position.displayName, position: position.id }));
             
@@ -933,6 +937,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         anchor.className = 'note-anchor fade-in';
         anchor.id = element.id;
         anchor.setAttribute('data-type', element.isRest ? 'rest' : 'note');
+            // Высокие ноты: окошко длительности показываем ниже ноты,
+            // сверху ему не хватает места и его закрывает шапка строки
+            if (!element.isRest && element.y < 50) anchor.setAttribute('data-high', '1');
         anchor.setAttribute('data-stem', element.stemUp ? 'up' : 'down');
         anchor.setAttribute('data-element-id', element.id);
         

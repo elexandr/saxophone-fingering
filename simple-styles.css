@@ -456,7 +456,7 @@ body {
 
 .staff-wrapper {
     padding: 0; /* Убираем паддинги, чтобы нотный стан начинался от краев */
-    height: 360px; /* По высоте нот: сверху окошки длительности, снизу подписи */
+    height: 310px; /* Сверху окошки длительности, снизу подписи; ниже C3 места не нужно */
 }
 
 .staff {
@@ -753,6 +753,13 @@ body {
 
 .note-anchor[data-stem="down"] .duration-panel {
     bottom: 18px;
+}
+
+/* У нот у верха стана места сверху нет: окошко уходит под шапку строки,
+   поэтому для них оно раскрывается вниз, под ноту */
+.note-anchor[data-high="1"] .duration-panel {
+    bottom: auto;
+    top: 26px;
 }
 
 .note-anchor[data-type="rest"] .duration-panel {
