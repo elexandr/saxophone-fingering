@@ -1302,7 +1302,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
         // Обновляем отображение
         note.element.style.top = newPosition.y + 'px';
+        this.syncHighFlag(note.element, newPosition.y);
         note.element.setAttribute('data-stem', note.stemUp ? 'up' : 'down');
+        this.syncHighFlag(note.element, newPosition.y);
         note.element.setAttribute('data-position-id', newNoteInfo.positionId);
         const label = note.element.querySelector('.note-label');
         if (label) label.textContent = this.displayNoteName(newNoteInfo.displayName);
@@ -1320,6 +1322,14 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         return true;
     }
     
+    // Признак высокой ноты: у нот у верха стана окошко длительности
+    // раскрывается вниз, иначе его закрывает шапка строки. Признак надо
+    // пересчитывать при каждом изменении высоты, а не только при создании
+    syncHighFlag(element, y) {
+        if (!element) return;
+        if (y < 50) element.setAttribute('data-high', '1');
+        else element.removeAttribute('data-high');
+    }
     // Короткое звучание одной ноты: при постановке, клике и смене высоты,
     // чтобы сразу слышать, что получается. Во время проигрывания молчим,
     // а при массовой загрузке мелодии - тем более: там нот десятки.
@@ -1691,6 +1701,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             
             // Обновляем отображение
             note.element.style.top = newPosition.y + 'px';
+        this.syncHighFlag(note.element, newPosition.y);
             note.element.setAttribute('data-stem', note.stemUp ? 'up' : 'down');
             note.element.setAttribute('data-position-id', newNoteInfo.positionId);
             const label = note.element.querySelector('.note-label');
