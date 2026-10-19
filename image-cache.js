@@ -10,7 +10,7 @@
 (function (root) {
     'use strict';
 
-    var DB_NAME = 'saxophone-fingering-assistant';
+    var DB_NAME = 'saxophone-fingering-assistant-alpha'; // у альфы своё хранилище
     var STORE_NAME = 'fingering-images';
     var DB_VERSION = 2; // поднята: имена картинок те же, а содержимое другое
     // Версия в адресе обходит и кэш браузера: старые картинки больше не подсунуть

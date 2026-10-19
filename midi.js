@@ -33,7 +33,9 @@
     ];
 
     // Шаг сетки: тридцатьвторая. Нужен, чтобы помещались ноты с точкой (0.375)
-    var GRID = 0.125;
+    // Сетка импорта: 1/120 доли. Делится и на 3, и на 5, поэтому
+    // триоли и квинтоли из чужого MIDI ложатся точно, без сдвига
+    var GRID = 1 / 120;
 
     var SEMITONES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -69,8 +71,14 @@
 
     function readAscii(bytes, pos, length) {
         var text = '';
-        for (var i = 0; i < length; i++) {
-            text += String.fromCharCode(bytes[pos + i]);
+        for (var i = 0; i < length; i++) text += String.fromCharCode(bytes[pos + i]);
+
+        // Названия дорожек часто записаны в UTF-8: без этого русские
+        // имена превращаются в мусор
+        if (typeof TextDecoder !== 'undefined') {
+            try {
+                return new TextDecoder('utf-8', { fatal: true }).decode(bytes.slice(pos, pos + length));
+            } catch (error) { /* не UTF-8: оставляем как есть */ }
         }
         return text;
     }
@@ -126,6 +134,12 @@
         var tracks = [];
         var tempoBpm = null;
         var timeSignature = null;
+        var programs = {};
+        var trackName = '';
+        var trackInfos = [];
+        var programs = {};
+        var trackName = '';
+        var trackInfos = [];
 
         for (var t = 0; t < trackCount && pos + 8 <= bytes.length; t++) {
             var chunkId = readAscii(bytes, pos, 4);
@@ -145,6 +159,20 @@
 
             if (tempoBpm === null && track.tempoBpm) tempoBpm = track.tempoBpm;
             if (timeSignature === null && track.timeSignature) timeSignature = track.timeSignature;
+            // Инструменты каналов и название дорожки: по ним назовём инструмент
+            if (track.programs) {
+                Object.keys(track.programs).forEach(function (ch) { programs[ch] = track.programs[ch]; });
+            }
+            if (!trackName && track.trackName) trackName = track.trackName;
+
+            // Каждая дорожка отдельно: у неё своё имя и свой инструмент,
+            // именно это показывает Guitar Pro в списке дорожек
+            trackInfos.push({
+                name: track.trackName || '',
+                programs: track.programs || {},
+                tempoBpm: track.tempoBpm || 0,
+                notes: track.notes || []
+            });
 
             tracks.push(track.notes);
             pos = body + chunkLength;
@@ -168,6 +196,9 @@
             trackCount: tracks.length,
             tempoBpm: tempoBpm,
             timeSignature: timeSignature,
+            programs: programs,
+            tracks: trackInfos,
+            trackName: trackName,
             notes: notes,
             errors: errors
         };
@@ -181,6 +212,15 @@
         var runningStatus = null;
         var tempoBpm = null;
         var timeSignature = null;
+        var programs = {};
+        var trackName = '';
+        var trackInfos = [];
+        var programs = {};
+        var trackName = '';
+        var trackInfos = [];
+        var programs = {};
+        var trackName = '';
+        var trackInfos = [];
         var lastTick = 0;
 
         while (pos < end) {
@@ -204,7 +244,9 @@
                     if (microPerQuarter > 0 && tempoBpm === null) {
                         tempoBpm = Math.round(60000000 / microPerQuarter);
                     }
-                } else if (metaType === META.timeSignature && metaLength.value >= 2) {
+                } else if (metaType === META.trackName && metaLength.value > 0) {
+            trackName = readAscii(bytes, pos, metaLength.value);
+        } else if (metaType === META.timeSignature && metaLength.value >= 2) {
                     if (timeSignature === null) {
                         timeSignature = {
                             numerator: bytes[pos],
@@ -274,6 +316,9 @@
             }
 
             if (command === 0xc0 || command === 0xd0) {
+                // Смена инструмента: запоминаем программу канала, по ней
+                // и назовём инструмент в списке выбора
+                if (command === 0xc0) programs[channel] = bytes[pos];
                 pos += 1; // один байт
                 continue;
             }
@@ -298,10 +343,29 @@
             }
         });
 
-        return { notes: notes, tempoBpm: tempoBpm, timeSignature: timeSignature };
+        return {
+            notes: notes,
+            tempoBpm: tempoBpm,
+            timeSignature: timeSignature,
+            programs: programs,
+            tracks: trackInfos,
+            trackName: trackName,
+            programs: programs,
+            tracks: trackInfos,
+            trackName: trackName
+        };
     }
 
     // --- преобразование в ноты приложения ----------------------------------
+
+    // Названия инструментов General MIDI: нужны, чтобы в списке выбора
+    // стояло имя инструмента, а не номер канала. Порядок строго по стандарту
+    var GM_NAMES = ['Рояль','Яркий рояль','Электророяль','Хонки-тонк','Электропиано 1','Электропиано 2','Клавесин','Клавинет','Челеста','Колокольчики','Музыкальная шкатулка','Вибрафон','Маримба','Ксилофон','Трубчатые колокола','Дульцимер','Орган','Орган Хаммонда','Орган рок','Церковный орган','Язычковый орган','Аккордеон','Губная гармоника','Танго-аккордеон','Гитара нейлон','Гитара сталь','Гитара джаз','Гитара чистая','Гитара с перегрузом','Гитара с приглушением','Гитара флажолет','Гитара 2','Бас','Бас медиатор','Бас слэп','Бас 1','Бас 2','Бас смычок','Бас тремоло','Бас флажолет','Скрипка','Альт','Виолончель','Контрабас','Тремоло-струнные','Пиццикато','Арфа','Литавры','Струнные 1','Струнные 2','Синтезаторные струнные 1','Синтезаторные струнные 2','Хор','Голос','Синтезаторный хор','Удар смычком','Труба','Тромбон','Туба','Труба с сурдиной','Валторна','Медные','Синтезаторные медные 1','Синтезаторные медные 2','Саксофон сопрановый','Саксофон альтовый','Саксофон теноровый','Саксофон баритоновый','Гобой','Английский рожок','Фагот','Кларнет','Флейта пикколо','Флейта','Блокфлейта','Флейта Пана','Бутылочная флейта','Сякухати','Свисток','Окарина','Лид 1','Лид 2','Лид 3','Лид 4','Лид 5','Лид 6','Лид 7','Лид 8','Пэд 1','Пэд 2','Пэд 3','Пэд 4','Пэд 5','Пэд 6','Пэд 7','Пэд 8','Эффекты 1','Эффекты 2','Эффекты 3','Эффекты 4','Эффекты 5','Эффекты 6','Эффекты 7','Эффекты 8','Ситар','Банджо','Сямисэн','Кото','Калимба','Волынка','Скрипка народная','Шанай','Колокольчики перкуссия','Агора','Стальные барабаны','Деревянный блок','Тайко','Мелодичные томы','Синтетические томы','Обратные тарелки','Писк','Смычок','Шум','Гром','Голос-эффект','Отражение','Космос','Взрыв'];
+    function instrumentName(program) {
+        var index = Number(program);
+        if (isNaN(index) || index < 0 || index >= GM_NAMES.length) return '';
+        return GM_NAMES[index];
+    }
 
     function midiToName(midi) {
         var octave = Math.floor(midi / 12) - 1;
@@ -357,43 +421,7 @@
 
     // Подбор слагаемых из разрешённых длительностей.
     // units - длительность в шагах сетки.
-    function splitUnits(units) {
-        var allowedUnits = ALLOWED.map(function (item) {
-            return Math.round(item.beats / GRID);
-        });
-        var parts = [];
-        var left = units;
 
-        while (left > 0) {
-            var pick = null;
-            for (var i = 0; i < allowedUnits.length; i++) {
-                var candidate = allowedUnits[i];
-                if (candidate <= left && (left - candidate === 0 || left - candidate >= 2)) {
-                    pick = candidate;
-                    break;
-                }
-            }
-            if (pick === null) pick = left >= 3 ? 3 : 2;
-            parts.push(pick);
-            left -= pick;
-        }
-
-        return parts;
-    }
-
-    function durationForUnits(units) {
-        var beats = units * GRID;
-        var best = ALLOWED[ALLOWED.length - 1];
-        var bestDiff = Infinity;
-        ALLOWED.forEach(function (item) {
-            var diff = Math.abs(item.beats - beats);
-            if (diff < bestDiff) {
-                bestDiff = diff;
-                best = item;
-            }
-        });
-        return { duration: best.duration, dotted: best.dotted };
-    }
 
     // Саксофон одноголосый, а MIDI бывает многоголосым. Считаем, сколько нот
     // звучит одновременно: если больше одной, файл придётся упрощать,
@@ -460,84 +488,268 @@
     }
 
     // data: результат parse(). Возвращает элементы приложения и сведения о переносе.
+    // Обычные длительности в шагах сетки 1/120: целая, половинная и так далее
+    // с точками. Всё, что сюда не попадает, - триоль или квинтоль
+    var PLAIN_UNITS = (function () {
+        var list = [];
+        [1, 2, 4, 8, 16, 32].forEach(function (den) {
+            var base = 480 / den;
+            list.push(base, base * 1.5, base * 1.75, base * 1.875);
+        });
+        return list;
+    })();
+
+    function isPlainUnits(units) {
+        return PLAIN_UNITS.some(function (value) { return Math.abs(value - units) < 0.01; });
+    }
+
+    // Если длина не обычная, но от неё получается обычная умножением,
+    // значит это группа: триоль 3:2 или квинтоль 5:4
+    function tupletForUnits(units) {
+        var candidates = [
+            { mul: 3, div: 2, actual: 3, normal: 2 },
+            { mul: 5, div: 4, actual: 5, normal: 4 }
+        ];
+        for (var i = 0; i < candidates.length; i++) {
+            var ratio = candidates[i];
+            var plain = units * ratio.mul / ratio.div;
+            if (isPlainUnits(plain)) {
+                return { actual: ratio.actual, normal: ratio.normal, plainUnits: Math.round(plain) };
+            }
+        }
+        return null;
+    }
+
+    // Преобразование нот MIDI в ноты приложения.
+    //
+    // Порядок взят из того, как это делают нотные редакторы:
+    //   1. наложения нот обрезаются по началу следующей;
+    //   2. многоголосие сводится к верхней линии;
+    //   3. начала нот ложатся на сетку в 12 шагов на четверть - она общая
+    //      для обычных долей (2, 4), точек и триолей (3);
+    //   4. запись строится по тактам слева направо: пауза до ноты, затем
+    //      нота, разложенная на выражаемые длительности;
+    //   5. длина до следующего начала сначала набирается обычными
+    //      длительностями (самая большая, что влезает), остаток - триольными;
+    //   6. что не влезло в такт - переносится за черту и связывается лигой.
     function toElements(data, options) {
         options = options || {};
         var shift = options.shift;
-        var segments = monophonicSegments(data.notes || []);
+        var ppq = data.ppq || 480;
 
-        if (shift === undefined || shift === null) {
-            shift = bestOctaveShift(segments.map(function (s) { return s.midi; })).shift;
+        // 1. Обрезка наложений
+        var sourceNotes = (data.notes || []).slice().sort(function (a, b) {
+            return a.startTick - b.startTick;
+        });
+        var onsets = {};
+        sourceNotes.forEach(function (note) { onsets[note.startTick] = true; });
+        for (var i = 0; i + 1 < sourceNotes.length; i++) {
+            var current = sourceNotes[i];
+            var following = sourceNotes[i + 1];
+            if (following.startTick > current.startTick &&
+                following.startTick < current.startTick + current.durationTicks) {
+                current.durationTicks = following.startTick - current.startTick;
+            }
         }
 
-        var ppq = data.ppq || 480;
+        // 2. Одна линия: верхняя нота в каждый момент, разрывы от наложений
+        // склеиваем, а повторные начала - нет
+        var segments = monophonicSegments(sourceNotes);
+        var merged = [];
+        segments.forEach(function (segment) {
+            var last = merged[merged.length - 1];
+            var boundary = last && Math.abs(last.endTick - segment.startTick) < 2;
+            if (last && last.midi === segment.midi && boundary && !onsets[segment.startTick]) {
+                last.endTick = segment.endTick;
+                return;
+            }
+            merged.push({ midi: segment.midi, startTick: segment.startTick, endTick: segment.endTick });
+        });
+        segments = merged;
+
+        // Сдвиг октавы: сам выбираем, если не задан
+        if (shift === undefined || shift === null) {
+            shift = bestOctaveShift(segments.map(function (item) { return item.midi; })).shift;
+        }
+
+        // 3. Сетка нотной записи
+        var STEPS = 12;
+        var stepTicks = ppq / STEPS;
+        var measureSteps = 4 * STEPS;
+
+        var NOTATION = [];
+        [[1, 0], [2, 1], [4, 2], [8, 3], [16, 4], [32, 5]].forEach(function (pair) {
+            var denominator = pair[0];
+            var base = 4 * STEPS / denominator;
+            var variants = [
+                { factor: 1, dots: 0 },
+                { factor: 1.5, dots: 1 },
+                { factor: 2 / 3, dots: 0, tuplet: { actual: 3, normal: 2 } }
+            ];
+            variants.forEach(function (variant) {
+                var size = base * variant.factor;
+                var rounded = Math.round(size);
+                if (rounded < 1 || Math.abs(size - rounded) > 0.001) return;
+                NOTATION.push({
+                    steps: rounded,
+                    duration: denominator,
+                    dotted: variant.dots,
+                    tuplet: variant.tuplet || null
+                });
+            });
+        });
+        NOTATION.sort(function (a, b) { return b.steps - a.steps; });
+        var plain = NOTATION.filter(function (item) { return !item.tuplet; });
+        var ternary = NOTATION.filter(function (item) { return !!item.tuplet; });
+
+        // Выбор длительности для куска:
+        //   - если место точно совпадает с записываемой длительностью, берём её;
+        //   - иначе самое большое значение БЕЗ точки: точка делает длительность
+        //     крупнее, и тогда остаток перестаёт укладываться, как в эталоне
+        //     (0,8333 должно дать восьмую 0,5 и триольную восьмую 0,333, а не
+        //     восьмую с точкой 0,75 и триольную 32-ю 0,083)
+        // Выбор длительности для куска. Правило взято из midi2ly (LilyPond):
+        //   - точное совпадение с обычной длительностью берём как есть,
+        //     включая точку;
+        //   - ПЕРВЫЙ кусок ноты берём обычной длительностью БЕЗ ТОЧКИ: так
+        //     0,8333 выходит как восьмая 0,5 и триольная восьмая 0,333,
+        //     а не как восьмая с точкой 0,75 плюс остаток;
+        //   - остаток — самое большое, что влезает, обычное или триольное.
+        function pick(room, untilBar, isFirstPiece) {
+            var limit = Math.min(room, untilBar);
+            if (limit < 1) return null;
+
+            // Точное совпадение берём целиком. Но НА ДОЛЕ триольное не берём:
+            // там эталон ставит обычную длительность, а остаток добирает
+            // триолью — 0,667 выходит как восьмая 0,5 и триольная 16-я 0,167,
+            // а не как одна триольная четверть. Между долями берём любое:
+            // там длительность обязана дойти ровно до границы
+            var i;
+            var onBeat = (position % STEPS === 0);
+            for (i = 0; i < NOTATION.length; i++) {
+                if (NOTATION[i].steps !== limit) continue;
+                if (onBeat && NOTATION[i].tuplet) continue;
+                return NOTATION[i];
+            }
+
+            var plain = null;
+            if (isFirstPiece) {
+                for (i = 0; i < NOTATION.length; i++) {
+                    var item = NOTATION[i];
+                    if (item.tuplet || item.dotted) continue;
+                    if (item.steps > limit) continue;
+                    if (!plain || item.steps > plain.steps) plain = item;
+                }
+                if (plain) return plain;
+            }
+
+            var best = null;
+            for (i = 0; i < NOTATION.length; i++) {
+                var value = NOTATION[i];
+                if (value.dotted || value.steps > limit) continue;
+                if (!best || value.steps > best.steps) best = value;
+            }
+            return best;
+        }
+
         var elements = [];
-        var polyphony = analyzePolyphony(data.notes || []);
         var stats = {
             notes: 0,
             rests: 0,
             skipped: 0,
             splitNotes: 0,
+            tuplets: 0,
             lowest: null,
             highest: null,
-            polyphony: polyphony
+            polyphony: analyzePolyphony(data.notes || [])
         };
 
-        // Позиция в шагах сетки, чтобы копейки не накапливались
-        var cursor = 0;
+        // Приложение хранит одну точку как true, две и три - числом
+        function dotsValue(count) {
+            if (!count) return 0;
+            if (count === 1) return true;
+            return count;
+        }
 
-        function pushRest(units) {
-            splitUnits(units).forEach(function (part) {
-                var value = durationForUnits(part);
-                elements.push({ isRest: true, duration: value.duration, dotted: value.dotted });
-                stats.rests++;
-            });
+        var position = 0;
+
+        function stepsOf(tick) {
+            return Math.round(tick / stepTicks);
+        }
+
+        // Граница куска. С доли можно тянуть до такта; между долями — только
+        // до следующей доли. Эталон Guitar Pro режет именно так: нота,
+        // начавшаяся между долями, сначала доходит до доли
+        function barEndFrom(at) {
+            if (at % STEPS === 0) {
+                return (Math.floor(at / measureSteps) + 1) * measureSteps;
+            }
+            return (Math.floor(at / STEPS) + 1) * STEPS;
         }
 
         segments.forEach(function (segment) {
             var midi = segment.midi + shift;
-
             if (midi < RANGE_MIN_MIDI || midi > RANGE_MAX_MIDI) {
                 stats.skipped++;
                 return;
             }
 
-            var startUnits = Math.round((segment.startTick / ppq) / GRID);
-            var lengthUnits = Math.round(((segment.endTick - segment.startTick) / ppq) / GRID);
+            var startStep = stepsOf(segment.startTick);
+            var endStep = stepsOf(segment.endTick);
+            if (endStep <= startStep) endStep = startStep + 1;
 
-            if (startUnits > cursor) {
-                pushRest(startUnits - cursor);
-                cursor = startUnits;
-            } else if (startUnits < cursor) {
-                startUnits = cursor;
+            // Пауза до точного начала ноты
+            var guard = 0;
+            while (position < startStep && guard++ < 128) {
+                var barEnd = barEndFrom(position);
+                var value = pick(startStep - position, barEnd - position);
+                if (!value) break;
+                elements.push({
+                    isRest: true,
+                    duration: value.duration,
+                    dotted: dotsValue(value.dotted),
+                    tuplet: value.tuplet
+                });
+                stats.rests++;
+                position += value.steps;
             }
-
-            if (lengthUnits < 2) lengthUnits = 2; // короче шестнадцатой приложение не умеет
+            if (position < startStep) position = startStep;
 
             var noteName = midiToName(midi);
-            var parts = splitUnits(lengthUnits);
-
-            parts.forEach(function (part) {
-                var value = durationForUnits(part);
+            guard = 0;
+            while (position < endStep && guard++ < 64) {
+                var limit = Math.min(endStep, barEndFrom(position));
+                var piece = pick(limit - position, barEndFrom(position) - position, position === startStep);
+                if (!piece) break;
+                var isLast = position + piece.steps >= endStep;
                 elements.push({
                     isRest: false,
                     noteName: noteName,
-                    duration: value.duration,
-                    dotted: value.dotted
+                    duration: piece.duration,
+                    dotted: dotsValue(piece.dotted),
+                    tuplet: piece.tuplet,
+                    // Продолжение той же ноты связываем лигой
+                    tiedToNext: !isLast
                 });
                 stats.notes++;
-            });
-
-            if (parts.length > 1) stats.splitNotes++;
+                if (piece.tuplet) stats.tuplets++;
+                if (!isLast) stats.splitNotes++;
+                position += piece.steps;
+            }
+            if (position < endStep) position = endStep;
 
             if (stats.lowest === null || midi < stats.lowest) stats.lowest = midi;
             if (stats.highest === null || midi > stats.highest) stats.highest = midi;
-
-            cursor = startUnits + lengthUnits;
         });
 
         var totalBeats = elements.reduce(function (sum, element) {
             var beats = 4 / (element.duration || 4);
-            return sum + (element.dotted ? beats * 1.5 : beats);
+            var dots = element.dotted || 0;
+            if (dots > 0) beats += beats / 2;
+            if (dots > 1) beats += beats / 4;
+            if (dots > 2) beats += beats / 8;
+            if (element.tuplet) beats = beats * (element.tuplet.normal / element.tuplet.actual);
+            return sum + beats;
         }, 0);
 
         return {
@@ -552,7 +764,22 @@
 
     // Сколько нот мелодии попадёт в диапазон при выбранном сдвиге
     function fitReport(data, shift) {
-        var segments = monophonicSegments(data.notes || []);
+        // Ноты записи могут накладываться: обрезаем каждую по началу следующей.
+        // Иначе сведение в одну линию режет по всем границам сразу, и получаются
+        // лишние ноты, паузы не на своих местах и потерянные триоли
+        var sourceNotes = (data.notes || []).slice().sort(function (a, b) {
+            return a.startTick - b.startTick;
+        });
+        for (var index = 0; index + 1 < sourceNotes.length; index++) {
+            var current = sourceNotes[index];
+            var following = sourceNotes[index + 1];
+            if (following.startTick > current.startTick &&
+                following.startTick < current.startTick + current.durationTicks) {
+                current.durationTicks = following.startTick - current.startTick;
+            }
+        }
+
+        var segments = monophonicSegments(sourceNotes);
         var inside = 0;
         segments.forEach(function (segment) {
             var midi = segment.midi + shift;
@@ -687,6 +914,7 @@
         monophonicSegments: monophonicSegments,
         analyzePolyphony: analyzePolyphony,
         midiToName: midiToName,
+        instrumentName: instrumentName,
         bestOctaveShift: bestOctaveShift,
         fitReport: fitReport,
         RANGE_MIN_MIDI: RANGE_MIN_MIDI,

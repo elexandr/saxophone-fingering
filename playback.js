@@ -48,7 +48,9 @@
         return Math.min(3, Math.floor(count));
     }
 
-    function beatsFor(duration, dotted) {
+    // tuplet - отношение группы: { actual: 3, normal: 2 } значит три ноты
+    // в времени двух. Без него длительность считается как обычно
+    function beatsFor(duration, dotted, tuplet) {
         var denominator = duration || 4;
         var beats = 4 / denominator;
 
@@ -62,13 +64,28 @@
             part = part / 2;
         }
 
-        return beats * factor;
+        beats = beats * factor;
+
+        if (tuplet && tuplet.actual && tuplet.normal) {
+            beats = beats * (Number(tuplet.normal) / Number(tuplet.actual));
+        }
+
+        return beats;
+    }
+
+    // Длительность элемента в долях с учётом точного времени из файла.
+    // В MusicXML <type> бывает приблизительным (так пишут конвертеры из MIDI),
+    // а настоящее время лежит в <duration>; разбор кладёт его в поле beats.
+    // Если верить одному <type>, мелодия уезжает относительно сопровождения
+    function beatsOf(element) {
+        if (element && typeof element.beats === 'number' && element.beats > 0) return element.beats;
+        return beatsFor(element && element.duration, element && element.dotted, element && element.tuplet);
     }
 
     // Длительность элемента в секундах при заданном темпе.
     function secondsFor(element, tempo) {
         var bpm = tempo > 0 ? tempo : 80;
-        return beatsFor(element && element.duration, element && element.dotted) * (60 / bpm);
+        return beatsOf(element) * (60 / bpm);
     }
 
     function totalSeconds(elements, tempo) {
@@ -202,7 +219,7 @@
     };
 
     // Одна нота: две расстроенные пилы через фильтр, огибающая и вибрато.
-    MelodyPlayer.prototype.scheduleNote = function (frequency, startAt, durationSec) {
+    MelodyPlayer.prototype.scheduleNote = function (frequency, startAt, durationSec, destination) {
         var ctx = this.ctx;
         var attack = 0.025;
         var release = 0.09;
@@ -239,7 +256,7 @@
         osc1.connect(filter);
         osc2.connect(filter);
         filter.connect(gain);
-        gain.connect(this.master);
+        gain.connect(destination || this.master);
 
         var stopAt = end + 0.2;
         osc1.start(startAt);
@@ -268,7 +285,7 @@
         return base + output;
     };
     // Щелчок метронома: короткий тик, у сильной доли выше и громче
-    MelodyPlayer.prototype.scheduleClick = function (startAt, accent) {
+    MelodyPlayer.prototype.scheduleClick = function (startAt, accent, destination) {
         var ctx = this.ctx;
         if (!ctx) return;
 
@@ -284,7 +301,7 @@
         gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.05);
 
         osc.connect(gain);
-        gain.connect(this.metronomeGain || this.master);
+        gain.connect(destination || this.metronomeGain || this.master);
 
         osc.start(startAt);
         osc.stop(startAt + 0.08);
@@ -318,6 +335,12 @@
         this.transpose = Number(semitones) || 0;
     };
 
+    // Отдельный сдвиг сопровождения. Складывается с общим: общий сдвиг
+    // двигает всю пьесу вместе с сопровождением, а этот - только его
+    MelodyPlayer.prototype.setAccompanimentTranspose = function (semitones) {
+        this.accompanimentTranspose = Number(semitones) || 0;
+    };
+
     MelodyPlayer.prototype.play = function (elements, tempo, handlers, options) {
         handlers = handlers || {};
         options = options || {};
@@ -345,32 +368,216 @@
         // но по звуковым часам, а не по setTimeout
         var timeline = [];
 
-        list.forEach(function (element, index) {
-            var durationSec = secondsFor(element, tempo);
-            var startAt = cursor;
+        // Связанные лигой ноты звучат одним протянутым звуком: вторую не
+        // ударяем, а продлеваем первую. Цепочка из трёх и более тоже
+        var plan = list.map(function (element) {
+            return { element: element, seconds: secondsFor(element, tempo), skip: false, head: null };
+        });
 
-            if (!element.isRest) {
-                var frequency = noteToFrequency(element.noteName, self.transpose);
-                if (frequency) {
-                    self.scheduleNote(frequency, startAt, durationSec * 0.92);
+        for (var p = 0; p + 1 < plan.length; p++) {
+            var head = plan[p];
+            var tail = plan[p + 1];
+            if (!head.element.tiedToNext || head.element.isRest || tail.element.isRest) continue;
+            if (head.element.noteName !== tail.element.noteName) continue;
+
+            var voice = head.skip && head.head ? head.head : head;
+            voice.seconds += tail.seconds;
+            tail.skip = true;
+            tail.head = voice;
+        }
+
+        // Фразировочная лига: где она открыта, ноты переходят одна в другую
+        // без разрыва. Последняя нота лиги закрывается обычным образом
+        var slurOpen = false;
+        var slurJoined = plan.map(function (item) {
+            if (item.element.slurStart) slurOpen = true;
+            var joined = slurOpen && !item.element.slurEnd;
+            if (item.element.slurEnd) slurOpen = false;
+            return joined;
+        });
+
+        // Аккомпанемент: ноты сопровождения играются по абсолютному времени.
+        // Он написан в концертной высоте, поэтому сдвиг инструмента к нему
+        // не применяется
+        var startCursor = cursor;
+        var secondsPerBeat = 60 / (tempo > 0 ? tempo : 80);
+
+        // Сопровождение планируем ПОРЦИЯМИ, по две секунды вперёд.
+        // Если запланировать все ноты сразу (в файле их бывает больше трёх
+        // тысяч), звуковая система браузера не справляется и замолкает
+        // весь звук - и мелодия тоже
+        var accNotes = (options.accompaniment || []).slice().sort(function (a, b) {
+            return (a.startBeat || 0) - (b.startBeat || 0);
+        });
+        var accIndex = 0;
+        // Если играем с выбранной ноты, сопровождение должно начаться с того же
+        // места. Его времена абсолютные от начала пьесы, поэтому вычитаем сдвиг
+        var accFromBeat = Number(options.accompanimentFromBeat) || 0;
+
+        // Общая громкость сопровождения и отдельная на каждую дорожку.
+        // Это узлы усиления: сколько бы дорожек ни было, нагрузка копеечная
+        var accMasterGain = ctx.createGain();
+        this.accompanimentVolume = options.accompanimentVolume === undefined
+            ? 1 : Number(options.accompanimentVolume);
+        this.accompanimentMuted = !!options.muteAccompaniment;
+        accMasterGain.gain.value = this.accompanimentMuted ? 0 : this.accompanimentVolume;
+        accMasterGain.connect(this.master);
+        this.accompanimentBus = { master: accMasterGain, tracks: {} };
+
+        // Основная линия тоже через свой узел: тогда галочку «звук основной»
+        // можно переключать во время игры. Раньше при снятой галочке ноты
+        // не ставились вовсе, и включить её в середине пьесы было нечем
+        this.mainMuted = !!options.muteMain;
+        this.melodyBus = ctx.createGain();
+        this.melodyBus.gain.value = this.mainMuted ? 0 : 1;
+        this.melodyBus.connect(this.master);
+
+        function trackBus(trackIndex, trackName) {
+            var key = String(trackIndex === undefined || trackIndex === null ? trackName || '0' : trackIndex);
+            var existing = self.accompanimentBus.tracks[key];
+            if (existing) return existing;
+
+            var settings = (options.accompanimentTracks || {})[key] || {};
+            var node = ctx.createGain();
+            var bus = {
+                key: key,
+                name: trackName || key,
+                gain: node,
+                volume: settings.volume === undefined ? 1 : Number(settings.volume),
+                muted: !!settings.muted
+            };
+            bus.gain.gain.value = bus.muted ? 0 : bus.volume;
+            node.connect(accMasterGain);
+            self.accompanimentBus.tracks[key] = bus;
+            return bus;
+        }
+
+        function scheduleAccompanimentPortion() {
+            // После остановки не досылаем: иначе сопровождение звучит ещё
+            // полсекунды-секунду после конца, «догоняя» остановленную игру
+            if (!self.playing) return;
+
+            // Галочка «звук сопровождения» глушит громкость, а не пропускает
+            // ноты. Пропущенные ноты терялись навсегда: снял галочку - тишина,
+            // поставил обратно - и включать уже нечего
+            if (typeof document !== 'undefined') {
+                var checkbox = document.getElementById('sound-accompaniment');
+                if (checkbox) self.setAccompanimentMuted(!checkbox.checked);
+            }
+
+            var horizon = ctx.currentTime + 2.0;
+            while (accIndex < accNotes.length) {
+                var note = accNotes[accIndex];
+                var noteBeat = (note.startBeat || 0);
+                // Ноты до места старта пропускаем
+                if (noteBeat + (note.beats || 0) <= accFromBeat) {
+                    accIndex++;
+                    continue;
+                }
+                var startAt = startCursor + (noteBeat - accFromBeat) * secondsPerBeat;
+                if (startAt > horizon) break;
+                accIndex++;
+
+                // Ударные: своего барабанного звука нет, играем щелчками.
+                // Бочка и малый - с ударением, тарелки - коротко.
+                // Заглушённая дорожка не пропускается, а идёт с нулевой
+                // громкостью: иначе снятая и возвращённая галочка теряла ноты
+                var bus = trackBus(note.trackIndex, note.trackName);
+
+                if (note.drum) {
+                    var kind = Number(note.midi) || 0;
+                    var accent = (kind === 35 || kind === 36 || kind === 38 || kind === 40);
+                    self.scheduleClick(startAt, accent, bus.gain);
+                    continue;
+                }
+
+                // Сдвиг сопровождения. Сдвиг инструмента к нему НЕ применяется:
+                // сопровождение двигается только кнопками «Все вверх» и «Все вниз»
+                // и полем «Сдвиг сопровождения»
+                var shift = self.accompanimentTranspose || 0;
+                var frequency = 440 * Math.pow(2, (note.midi + shift - 69) / 12);
+                self.scheduleNote(frequency, startAt, (note.beats || 1) * secondsPerBeat * 0.98, bus.gain);
+            }
+            if (accIndex < accNotes.length) {
+                // Таймер кладём в общий список: stop() его очистит
+                self.accompanimentTimer = setTimeout(scheduleAccompanimentPortion, 500);
+                self.timers.push(self.accompanimentTimer);
+            }
+        }
+
+        // Сопровождение ставим всегда, а слышно его или нет - решает громкость.
+        // Раньше при снятой галочке планировщик не запускался совсем, и
+        // поставленная обратно галочка ничего не включала
+        if (accNotes.length) {
+            scheduleAccompanimentPortion();
+        }
+
+        // Расписание строим целиком сразу: это только числа, дешево. А звук
+        // ставим порциями, как и сопровождение: у длинной пьесы нот бывает
+        // под тысячу, и постановка всех сразу занимает главный поток на
+        // сотни миллисекунд - замерено 378 мс на 195 нотах
+        plan.forEach(function (item, index) {
+            var element = item.element;
+            timeline.push({
+                index: index,
+                element: element,
+                startAt: cursor,
+                seconds: item.seconds,
+                // Связанная нота продолжает звук предыдущей: её не ударяем
+                skip: item.skip,
+                // Под лигой нота звучит всю длительность, без разрыва
+                joined: slurJoined[index] || (slurJoined[index - 1] && !element.slurEnd && index > 0)
+            });
+            // Время идёт по исходным длительностям: лига меняет звук, не такт
+            cursor += secondsFor(element, tempo);
+        });
+
+        var melodyIndex = 0;
+
+        // Метроном тоже ставим порциями: щелчков на всю пьесу бывает под четыре
+        // сотни, и разом они занимали главный поток сильнее, чем ноты
+        var beatSeconds = 60 / (tempo > 0 ? tempo : 80);
+        var beatsPerBar = options.beatsPerBar > 0 ? options.beatsPerBar : 4;
+        var metronomeOn = !!options.metronome;
+        var metronomeStart = ctx.currentTime + leadIn;
+        var metronomeTotal = metronomeOn ? Math.round((cursor - metronomeStart) / beatSeconds) : -1;
+        var metronomeBeat = 0;
+
+        function scheduleMelodyPortion() {
+            if (!self.playing) return;
+            var horizon = ctx.currentTime + 2.0;
+
+            while (melodyIndex < timeline.length) {
+                var step = timeline[melodyIndex];
+                if (step.startAt > horizon) break;
+                melodyIndex++;
+
+                // Основную линию можно выключить: подсветка при этом работает,
+                // потому что она идёт по времени, а не по звуку
+                if (step.skip || step.element.isRest) continue;
+                var frequency = noteToFrequency(step.element.noteName, self.transpose);
+                if (!frequency) continue;
+                self.scheduleNote(frequency, step.startAt,
+                    step.seconds * (step.joined ? 1 : 0.92), self.melodyBus);
+            }
+
+            if (metronomeOn) {
+                while (metronomeBeat <= metronomeTotal) {
+                    var clickAt = metronomeStart + metronomeBeat * beatSeconds;
+                    if (clickAt > horizon) break;
+                    self.scheduleClick(clickAt, metronomeBeat % beatsPerBar === 0);
+                    metronomeBeat++;
                 }
             }
 
-            timeline.push({ index: index, element: element, startAt: startAt });
-            cursor += durationSec;
-        });
-
-        // Метроном: щелчок на каждую долю, ударение на сильную
-        if (options.metronome) {
-            var beatSeconds = 60 / (tempo > 0 ? tempo : 80);
-            var beatsPerBar = options.beatsPerBar > 0 ? options.beatsPerBar : 4;
-            var startCursor = ctx.currentTime + leadIn;
-            var totalBeats = Math.round((cursor - startCursor) / beatSeconds);
-
-            for (var beat = 0; beat <= totalBeats; beat++) {
-                self.scheduleClick(startCursor + beat * beatSeconds, beat % beatsPerBar === 0);
+            var melodyLeft = melodyIndex < timeline.length;
+            var metronomeLeft = metronomeOn && metronomeBeat <= metronomeTotal;
+            if (melodyLeft || metronomeLeft) {
+                self.timers.push(setTimeout(scheduleMelodyPortion, 500));
             }
         }
+
+        scheduleMelodyPortion();
 
         this.timeline = timeline;
         this.timelineIndex = 0;
@@ -424,10 +631,63 @@
 
         var tempo = this.lastPlay.tempo;
         var handlers = this.lastPlay.handlers;
-        var options = this.lastPlay.options;
+        // Галочки звука могли переключить во время игры: переносим их текущее
+        // состояние, иначе перепланирование вернуло бы старое
+        var options = Object.assign({}, this.lastPlay.options, {
+            muteMain: !!this.mainMuted,
+            muteAccompaniment: !!this.accompanimentMuted
+        });
         this.play(rest, tempo, handlers, options);
 
         return true;
+    };
+
+    // Громкость сопровождения целиком и по дорожкам. Действует сразу,
+    // в том числе во время игры: меняются значения узлов, ноты не трогаются
+    MelodyPlayer.prototype.applyAccompanimentGain = function () {
+        if (!this.accompanimentBus || !this.accompanimentBus.master) return;
+        var volume = this.accompanimentVolume === undefined ? 1 : Number(this.accompanimentVolume) || 0;
+        this.accompanimentBus.master.gain.value = this.accompanimentMuted ? 0 : volume;
+    };
+
+    MelodyPlayer.prototype.setAccompanimentVolume = function (value) {
+        this.accompanimentVolume = Math.max(0, Math.min(1, Number(value) || 0));
+        this.applyAccompanimentGain();
+    };
+
+    // Галочка «звук сопровождения». Именно громкость, а не пропуск нот:
+    // тогда включить обратно можно в любой момент и ничего не теряется
+    MelodyPlayer.prototype.setAccompanimentMuted = function (muted) {
+        this.accompanimentMuted = !!muted;
+        this.applyAccompanimentGain();
+    };
+
+    // Галочка «звук основной линии»
+    MelodyPlayer.prototype.setMainMuted = function (muted) {
+        this.mainMuted = !!muted;
+        if (this.melodyBus) this.melodyBus.gain.value = this.mainMuted ? 0 : 1;
+    };
+
+    MelodyPlayer.prototype.applyTrackGain = function (bus) {
+        if (!bus || !bus.gain) return;
+        var volume = bus.volume === undefined ? 1 : Number(bus.volume) || 0;
+        bus.gain.gain.value = bus.muted ? 0 : volume;
+    };
+
+    MelodyPlayer.prototype.setTrackVolume = function (trackKey, value) {
+        if (!this.accompanimentBus) return;
+        var bus = this.accompanimentBus.tracks[String(trackKey)];
+        if (!bus) return;
+        bus.volume = Math.max(0, Math.min(1, Number(value) || 0));
+        this.applyTrackGain(bus);
+    };
+
+    MelodyPlayer.prototype.setTrackMuted = function (trackKey, muted) {
+        if (!this.accompanimentBus) return;
+        var bus = this.accompanimentBus.tracks[String(trackKey)];
+        if (!bus) return;
+        bus.muted = !!muted;
+        this.applyTrackGain(bus);
     };
 
     MelodyPlayer.prototype.stop = function () {
@@ -445,6 +705,8 @@
             try { voice.disconnect(); } catch (e) { /* уже отключён */ }
         });
         this.voices = [];
+        this.accompanimentBus = null;
+        this.melodyBus = null;
         this.playing = false;
     };
 
@@ -457,6 +719,7 @@
         transposeNoteName: transposeNoteName,
         dotCount: dotCount,
         beatsFor: beatsFor,
+        beatsOf: beatsOf,
         secondsFor: secondsFor,
         totalSeconds: totalSeconds,
         computeRepeatPairs: computeRepeatPairs,
