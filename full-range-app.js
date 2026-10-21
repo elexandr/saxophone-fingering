@@ -1006,6 +1006,14 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 return;
             }
             this.rangeMode = false;
+            // Во время игры клик по ноте переносит проигрывание сюда и не
+            // выделяет ноту: так удобно перескочить на нужное место на слух
+            if (this.melodyPlayer && this.melodyPlayer.playing &&
+                !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+                typeof this.playFromElement === 'function') {
+                this.playFromElement(element);
+                return;
+            }
             // Shift - диапазон, Ctrl - добавить или убрать одну ноту
             this.selectNote(element.id, { toggle: e.ctrlKey || e.metaKey, range: e.shiftKey });
             // По клику слышно высоту ноты. Именно по клику, а не при выделении:
@@ -5423,13 +5431,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('btn-play').addEventListener('click', playMelody);
     document.getElementById('btn-stop').addEventListener('click', stopMelody);
+
+    // Клик по ноте во время игры переносит проигрывание на это место.
+    // Выделение при этом не ставится: пользователь слушает, а не правит
+    staffManager.playFromElement = function (element) {
+        playMelody(element);
+    };
     
     function setPlayingState(playing) {
         document.getElementById('btn-play').disabled = playing;
         document.getElementById('btn-stop').disabled = !playing;
     }
     
-    function playMelody() {
+    // fromElement - играть с этой ноты (клик по ноте во время игры).
+    // Без него начинаем с выделенной ноты или с начала
+    function playMelody(fromElement) {
         if (staffManager.notes.length === 0) {
             staffManager.updateStatus(t('status.addNotesFirst'));
             return;
@@ -5441,7 +5457,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const repeatText = repeats ? t('status.playingRepeat', { n: repeats }) : '';
         
         // Если нота выделена, начинаем с неё
-        const fromIndex = selectedStartIndex(fullSequence);
+        const fromIndex = fromElement
+            ? Math.max(0, fullSequence.indexOf(fromElement))
+            : selectedStartIndex(fullSequence);
         const sequence = fromIndex > 0 ? fullSequence.slice(fromIndex) : fullSequence;
         const fromText = fromIndex > 0 ? t('status.playingFrom') : '';
         
