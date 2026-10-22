@@ -5437,6 +5437,24 @@ document.addEventListener('DOMContentLoaded', () => {
     staffManager.playFromElement = function (element) {
         playMelody(element);
     };
+
+    // Стрелка влево или вправо во время игры перескакивает на соседнюю ноту
+    // и продолжает звук с неё. Возвращает true, если переход сделан
+    staffManager.seekBy = function (step) {
+        const player = staffManager.melodyPlayer;
+        if (!player || !player.playing || !player.timeline) return false;
+
+        const fullSequence = Playback.buildSequence(staffManager.notes);
+        if (!fullSequence.length) return false;
+
+        // Номер звучащей ноты: где начали плюс сколько уже прошли
+        const current = (Number(staffManager.playStartIndex) || 0) + (player.timelineIndex || 0);
+        const target = current + step;
+        if (target < 0 || target >= fullSequence.length) return false;
+
+        playMelody(null, target);
+        return true;
+    };
     
     function setPlayingState(playing) {
         document.getElementById('btn-play').disabled = playing;
@@ -5444,8 +5462,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // fromElement - играть с этой ноты (клик по ноте во время игры).
-    // Без него начинаем с выделенной ноты или с начала
-    function playMelody(fromElement) {
+    // fromIndex - играть с этого места в порядке воспроизведения (стрелки).
+    // Без них начинаем с выделенной ноты или с начала
+    function playMelody(fromElement, fromIndex) {
         if (staffManager.notes.length === 0) {
             staffManager.updateStatus(t('status.addNotesFirst'));
             return;
@@ -5457,11 +5476,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const repeatText = repeats ? t('status.playingRepeat', { n: repeats }) : '';
         
         // Если нота выделена, начинаем с неё
-        const fromIndex = fromElement
-            ? Math.max(0, fullSequence.indexOf(fromElement))
-            : selectedStartIndex(fullSequence);
-        const sequence = fromIndex > 0 ? fullSequence.slice(fromIndex) : fullSequence;
-        const fromText = fromIndex > 0 ? t('status.playingFrom') : '';
+        const startIndex = typeof fromIndex === 'number'
+            ? Math.max(0, Math.min(fullSequence.length - 1, fromIndex))
+            : (fromElement
+                ? Math.max(0, fullSequence.indexOf(fromElement))
+                : selectedStartIndex(fullSequence));
+        // Запоминаем, откуда пошло проигрывание: по этому числу стрелки
+        // считают, какая нота звучит сейчас, и перескакивают на соседнюю
+        staffManager.playStartIndex = startIndex;
+        const sequence = startIndex > 0 ? fullSequence.slice(startIndex) : fullSequence;
+        const fromText = startIndex > 0 ? t('status.playingFrom') : '';
         
         function start(isRepeat) {
             // Своё озвучивание отдельных нот гасим: иначе оно наложится
@@ -5483,8 +5507,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // «звук основной» и «звук сопровождения» ни на что не влияли
             // С какой доли начинаем: сопровождение стартует с того же места
             let accompanimentFromBeat = 0;
-            if (fromIndex > 0) {
-                for (let i = 0; i < fromIndex; i++) {
+            if (startIndex > 0) {
+                for (let i = 0; i < startIndex; i++) {
                     const element = fullSequence[i];
                     accompanimentFromBeat += Playback.beatsOf(element);
                 }
@@ -5690,9 +5714,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // При открытом окне стрелки не должны двигать ноты за ним
         if (document.querySelector('#about-modal:not([hidden]), #help-modal:not([hidden])')) return;
         
-        // Влево и вправо - переход по ногам
+        // Влево и вправо - переход по ногам. Во время игры эти же клавиши
+        // перескакивают по звучащим нотам: зазвучало с соседней, без паузы
         if (isLeft || isRight) {
             event.preventDefault();
+            if (staffManager.seekBy && staffManager.seekBy(isRight ? 1 : -1)) return;
             staffManager.moveSelection(isRight ? 1 : -1);
             return;
         }
