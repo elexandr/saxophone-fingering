@@ -1643,6 +1643,12 @@ body.many-selected .note-anchor .duration-panel {
 }
 /* Панель громкости: основная линия, сопровождение (и его дорожки), метроном.
    Видна всегда, даже когда сопровождения в файле нет */
+/* Скрытая строка не показывается: display у строки свой, и он перебивал
+   браузерное правило для атрибута hidden */
+.volume-panel [hidden] {
+    display: none !important;
+}
+
 .volume-panel {
     box-sizing: border-box;
     margin: 8px 0 0;
@@ -1714,6 +1720,22 @@ body.many-selected .note-anchor .duration-panel {
 .volume-row input[type="range"] {
     width: 100%;
     margin: 0;
+    /* Синяя заливка слева от ползунка: у всех трёх строк одинаково */
+    accent-color: #667eea;
+}
+
+/* Выключенная дорожка сопровождения: серое имя и серый ползунок */
+.accompaniment-track.muted {
+    opacity: 0.5;
+}
+
+.accompaniment-track.muted .accompaniment-name {
+    color: #8d99a6;
+}
+
+.accompaniment-track.muted input[type="range"] {
+    accent-color: #b6bfc9;
+    filter: grayscale(1);
 }
 
 .accompaniment-track { display: flex; align-items: center; gap: 6px; margin: 3px 0 3px 8px; font-size: 11px; }

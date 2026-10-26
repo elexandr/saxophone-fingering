@@ -522,6 +522,15 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         return repeats;
     }
 
+    // Включение метронома одним вызовом: кнопка, проверки, восстановление
+    // настроек. Во время игры щелчки начинаются с текущей доли
+    setMetronome(enabled) {
+        this.metronome = !!enabled;
+        if (this.melodyPlayer) this.melodyPlayer.setMetronomeLive(this.metronome);
+        this.applySoundButtons();
+        return this.metronome;
+    }
+
     // Кнопки отключения в блоке громкости: основная линия, всё сопровождение
     // и метроном. Работают сразу, в том числе во время игры
     toggleSound(kind) {
@@ -532,8 +541,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             this.accompanimentMuted = !this.accompanimentMuted;
             if (this.melodyPlayer) this.melodyPlayer.setAccompanimentMuted(this.accompanimentMuted);
         } else if (kind === 'metronome') {
-            this.metronome = !this.metronome;
-            if (this.melodyPlayer) this.melodyPlayer.setMetronomeMuted(!this.metronome);
+            // Включили во время игры - метроном начинает отсчитывать с текущей
+            // доли, а не только со следующего запуска
+            this.setMetronome(!this.metronome);
         }
 
         this.applySoundButtons();
@@ -565,7 +575,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (this.melodyPlayer) {
             this.melodyPlayer.setMainMuted(this.mainMuted);
             this.melodyPlayer.setAccompanimentMuted(this.accompanimentMuted);
-            this.melodyPlayer.setMetronomeMuted(!this.metronome);
+            this.melodyPlayer.setMetronomeLive(this.metronome);
         }
         this.applySoundButtons();
     }
@@ -4629,6 +4639,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const panel = document.getElementById('accompaniment-panel');
         const list = document.getElementById('accompaniment-tracks');
         const master = document.getElementById('accompaniment-volume');
+        const row = document.getElementById('accompaniment-row');
         if (!panel || !list) return;
 
         const names = {};
@@ -4639,9 +4650,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         });
         const keys = Object.keys(names);
 
-        // Панель громкости видна всегда: громкость основной линии нужна и без
-        // сопровождения. Прячем только строки дорожек, когда их нет
+        // Панель громкости видна всегда: мелодия и метроном нужны и без
+        // сопровождения. Строку сопровождения и её дорожки показываем только
+        // тогда, когда сопровождение в файле есть
         panel.hidden = false;
+        if (row) row.hidden = keys.length === 0;
         list.hidden = keys.length === 0;
         if (master) master.value = String(Math.round(this.accompanimentVolume * 100));
         list.innerHTML = '';
@@ -4650,8 +4663,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             if (!this.accompanimentSettings[key]) this.accompanimentSettings[key] = { volume: 1, muted: false };
             const settings = this.accompanimentSettings[key];
 
-            const row = document.createElement('div');
-            row.className = 'accompaniment-track';
+            const trackRow = document.createElement('div');
+            trackRow.className = settings.muted ? 'accompaniment-track muted' : 'accompaniment-track';
 
             const toggle = document.createElement('input');
             toggle.type = 'checkbox';
@@ -4659,6 +4672,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             toggle.title = t('setting.soundAccompaniment.hint');
             toggle.addEventListener('change', () => {
                 settings.muted = !toggle.checked;
+                // Выключенная дорожка сереет вместе со своим ползунком
+                trackRow.classList.toggle('muted', settings.muted);
                 if (this.melodyPlayer) this.melodyPlayer.setTrackMuted(key, settings.muted);
             });
 
@@ -4676,10 +4691,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 if (this.melodyPlayer) this.melodyPlayer.setTrackVolume(key, settings.volume);
             });
 
-            row.appendChild(toggle);
-            row.appendChild(label);
-            row.appendChild(volume);
-            list.appendChild(row);
+            trackRow.appendChild(toggle);
+            trackRow.appendChild(label);
+            trackRow.appendChild(volume);
+            list.appendChild(trackRow);
         });
     }
 

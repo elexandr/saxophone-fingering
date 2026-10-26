@@ -327,6 +327,14 @@
         this.applyMetronomeGain();
     };
 
+    // Включение метронома во время игры: щелчки пойдут с ближайшей доли,
+    // даже если при запуске метроном был выключен
+    MelodyPlayer.prototype.setMetronomeLive = function (enabled) {
+        this.metronomeLive = !!enabled;
+        this.metronomeMuted = !this.metronomeLive;
+        this.applyMetronomeGain();
+    };
+
     // Щелчки отсчёта. accentFirst - ударять первую долю: отсчёт длиной в такт
     // начинается с сильной доли, и по ней проще поймать начало
     MelodyPlayer.prototype.countInClicks = function (count, secondsEach, accentFirst) {
@@ -560,12 +568,13 @@
         // сотни, и разом они занимали главный поток сильнее, чем ноты
         var beatSeconds = 60 / (tempo > 0 ? tempo : 80);
         var beatsPerBar = options.beatsPerBar > 0 ? options.beatsPerBar : 4;
-        var metronomeOn = !!options.metronome;
-        // Новая игра: щелчки снова слышны, если метроном включён
-        this.metronomeMuted = !metronomeOn;
+        // Метроном можно включить и в середине игры: тогда он начинает
+        // отсчитывать с ближайшей доли, а не только со следующего запуска
+        this.metronomeLive = !!options.metronome;
+        this.metronomeMuted = !this.metronomeLive;
         this.applyMetronomeGain();
         var metronomeStart = ctx.currentTime + leadIn;
-        var metronomeTotal = metronomeOn ? Math.round((cursor - metronomeStart) / beatSeconds) : -1;
+        var metronomeTotal = Math.round((cursor - metronomeStart) / beatSeconds);
         var metronomeBeat = 0;
 
         function scheduleMelodyPortion() {
@@ -586,7 +595,12 @@
                     step.seconds * (step.joined ? 1 : 0.92), self.melodyBus);
             }
 
-            if (metronomeOn) {
+            if (self.metronomeLive) {
+                // Догоняем текущую долю: если метроном включили в середине игры,
+                // щелчки начинаются с ближайшей доли, а не с начала пьесы
+                var nowBeat = Math.floor((ctx.currentTime - metronomeStart) / beatSeconds);
+                if (metronomeBeat < nowBeat) metronomeBeat = nowBeat + 1;
+
                 while (metronomeBeat <= metronomeTotal) {
                     var clickAt = metronomeStart + metronomeBeat * beatSeconds;
                     if (clickAt > horizon) break;
@@ -596,7 +610,7 @@
             }
 
             var melodyLeft = melodyIndex < timeline.length;
-            var metronomeLeft = metronomeOn && metronomeBeat <= metronomeTotal;
+            var metronomeLeft = self.metronomeLive && metronomeBeat <= metronomeTotal;
             if (melodyLeft || metronomeLeft) {
                 self.timers.push(setTimeout(scheduleMelodyPortion, 500));
             }
@@ -665,7 +679,8 @@
         var options = Object.assign({}, this.lastPlay.options, {
             muteMain: !!this.mainMuted,
             muteAccompaniment: !!this.accompanimentMuted,
-            mainVolume: this.mainVolume
+            mainVolume: this.mainVolume,
+            metronome: !!this.metronomeLive
         });
 
         // Сопровождение продолжает с текущего места, а не с начала пьесы
