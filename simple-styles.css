@@ -140,15 +140,47 @@ body {
 }
 
 .control-section {
-    margin-bottom: 14px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #e9ecef;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    /* Граница блоков заметная: в панели видно, где кончается один раздел */
+    border-bottom: 2px solid #9fadbe;
 }
 
 .control-section:last-child {
     border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0;
+}
+
+/* Поле количества повторов по кругу: работает только при включённом круге */
+.loop-repeats {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 13px;
+    color: #495057;
+}
+
+.loop-repeats .number-input {
+    width: 64px;
+}
+
+.loop-repeats .number-input:disabled {
+    background: #edf0f4;
+    color: #9aa5b1;
+    cursor: not-allowed;
+}
+
+/* Счётчик повторов: виден во время игры по кругу */
+.loop-counter {
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: #e8eefc;
+    color: #3a4b8a;
+    font-size: 13px;
+    text-align: center;
 }
 
 .control-section h3 {

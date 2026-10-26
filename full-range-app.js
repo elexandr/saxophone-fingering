@@ -74,6 +74,8 @@ class FullRangeStaffManager {
         this.displayMode = 'sharps'; // 'sharps' или 'flats'
         this.tempo = 80; // Темп воспроизведения, ударов в минуту
         this.loopPlayback = false;
+        this.loopRepeats = 20; // сколько раз играть по кругу
+        this.loopCount = 0;    // сколько кругов уже сыграно в этом проигрывании
         // Метроном и отсчёт перед началом
         // Сдвиг звука приложения: насколько звук отличается от нот на стане.
         // Ноль - нота звучит как записана, сдвиги идут уже от загруженного
@@ -277,6 +279,19 @@ class FullRangeStaffManager {
             loopCheckbox.addEventListener('change', (e) => {
                 this.setLoopPlayback(e.target.checked);
             });
+        }
+
+        // Сколько раз играть по кругу: поле активно только при включённом круге
+        const loopCountField = document.getElementById('loop-count');
+        if (loopCountField) {
+            loopCountField.value = String(this.loopRepeats);
+            loopCountField.disabled = !this.loopPlayback;
+            loopCountField.addEventListener('change', (e) => {
+                staffManager.setLoopRepeats(e.target.value);
+                staffManager.updateLoopCounter();
+                staffManager.scheduleAutosave();
+            });
+        }
 
         
 document.getElementById('metronome-on').addEventListener('change', (e) => {
@@ -329,8 +344,6 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             });
         }
 
-        }
-        
         this.bindLanguageSwitch();
         this.bindModal('about-modal', 'btn-about');
         this.bindModal('help-modal', 'btn-help');
@@ -491,8 +504,46 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (checkbox && checkbox.checked !== this.loopPlayback) {
             checkbox.checked = this.loopPlayback;
         }
+
+        // Сколько раз играть по кругу: поле нужно только при включённом круге.
+        // Галочку можно поставить и во время игры - тогда счётчик появляется
+        // сразу, и следующий круг пойдёт по счёту
+        const countField = document.getElementById('loop-count');
+        if (countField) countField.disabled = !this.loopPlayback;
+        this.updateLoopCounter();
         
         if (!silent) this.scheduleAutosave();
+    }
+
+    // Сколько раз играть по кругу. По умолчанию 20, выбранное запоминается
+    setLoopRepeats(value) {
+        const parsed = parseInt(value, 10);
+        // Пустое поле или мусор - возвращаемся к 20, число зажимаем в 1..999
+        const repeats = Number.isFinite(parsed) ? Math.min(999, Math.max(1, parsed)) : 20;
+        this.loopRepeats = repeats;
+
+        const field = document.getElementById('loop-count');
+        if (field && parseInt(field.value, 10) !== repeats) field.value = repeats;
+
+        return repeats;
+    }
+
+    // Счётчик повторов: виден во время игры по кругу, после остановки гаснет
+    updateLoopCounter(done = false) {
+        const counter = document.getElementById('loop-counter');
+        if (!counter) return;
+
+        const playing = !!this.melodyPlayer && this.melodyPlayer.playing;
+        if (done || !this.loopPlayback || !playing) {
+            counter.hidden = true;
+            counter.textContent = '';
+            return;
+        }
+
+        const total = this.loopRepeats || 20;
+        const current = Math.min(total, (this.loopCount || 0) + 1);
+        counter.hidden = false;
+        counter.textContent = t('status.loopRepeat', { n: current, total: total });
     }
     
     // === Строки стана ===
@@ -1756,13 +1807,14 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // чтобы сразу слышать, что получается. Во время проигрывания молчим,
     // а при массовой загрузке мелодии - тем более: там нот десятки.
     // Отсчёт перед началом: три секунды с крупными цифрами по центру.
-    // Щелчки идут, только если включён метроном
-    runCountIn(callback) {
+    // Щелчки идут, только если включён метроном.
+    // startElement - с какой ноты пойдёт игра: при повторе это начало круга
+    runCountIn(callback, startElement) {
         const overlay = document.getElementById('count-in');
         const steps = 3;
 
         // Экран переводим сразу: за время отсчёта видно, откуда пойдёт игра
-        this.followPlayback(this.notes[0], { instant: true });
+        this.followPlayback(startElement || this.notes[0], { instant: true });
 
         if (this.metronome && this.melodyPlayer) {
             this.melodyPlayer.countInClicks(steps, 1);
@@ -3905,6 +3957,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 showNoteNames: this.showNoteNames,
                 showFingerings: this.showFingerings,
                 loopPlayback: this.loopPlayback,
+                loopRepeats: this.loopRepeats,
                 metronome: this.metronome,
                 metronomeVolume: this.metronomeVolume,
                 appSoundShift: this.appSoundShift,
@@ -4185,6 +4238,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 showNoteNames: this.showNoteNames,
                 showFingerings: this.showFingerings,
                 loopPlayback: this.loopPlayback,
+                loopRepeats: this.loopRepeats,
                 metronome: this.metronome,
                 metronomeVolume: this.metronomeVolume,
                 appSoundShift: this.appSoundShift,
@@ -4314,6 +4368,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
         if (settings.loopPlayback !== undefined) {
             this.setLoopPlayback(settings.loopPlayback, true);
+        }
+
+        if (settings.loopRepeats !== undefined) {
+            this.setLoopRepeats(settings.loopRepeats);
         }
         
         if (settings.displayMode) {
@@ -5515,7 +5573,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const playOptions = isRepeat
-                ? { leadIn: LOOP_PAUSE_SECONDS, tailMs: 0, metronome: staffManager.metronome, beatsPerBar: staffManager.measureBeats() }
+                ? {
+                    // После отсчёта ждать ещё две секунды не нужно
+                    leadIn: staffManager.countIn ? 0 : LOOP_PAUSE_SECONDS,
+                    tailMs: 0,
+                    metronome: staffManager.metronome,
+                    beatsPerBar: staffManager.measureBeats()
+                }
                 : { metronome: staffManager.metronome, beatsPerBar: staffManager.measureBeats() };
             playOptions.accompaniment = staffManager.accompaniment || [];
             playOptions.accompanimentFromBeat = accompanimentFromBeat;
@@ -5530,18 +5594,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     staffManager.followPlayback(element);
                 },
                 onEnd: () => {
-                    // По кругу - пауза, за неё стан поднимается на первую строку,
-                    // и только потом начинается следующий круг
-                    if (staffManager.loopPlayback) {
+                    // Круг закончился. Сколько раз играть - читаем сейчас:
+                    // галочку и число повторов можно менять прямо во время игры
+                    staffManager.loopCount = (staffManager.loopCount || 0) + 1;
+                    const repeats = staffManager.loopRepeats || 20;
+                    const keepLooping = staffManager.loopPlayback &&
+                        staffManager.loopCount < repeats;
+
+                    if (keepLooping) {
                         staffManager.highlightElement(null);
                         staffManager.followPlayback(sequence[0]);
+                        staffManager.updateLoopCounter();
+
+                        // Отсчёт перед каждым повтором, а не только в начале.
+                        // Пауза тогда не нужна: отсчёт сам даёт три секунды
+                        if (staffManager.countIn) {
+                            staffManager.runCountIn(() => start(true), sequence[0]);
+                            return;
+                        }
+
                         staffManager.updateStatus(t('status.loopPause'));
                         start(true);
                         return;
                     }
+
                     staffManager.highlightElement(null);
                     setPlayingState(false);
-                    staffManager.updateStatus(t('status.playDone'));
+                    staffManager.updateLoopCounter(true);
+                    // Если круги кончились по счёту - так и скажем
+                    if (staffManager.loopPlayback && staffManager.loopCount >= repeats) {
+                        staffManager.updateStatus(t('status.loopDone', { n: staffManager.loopCount }));
+                    } else {
+                        staffManager.updateStatus(t('status.playDone'));
+                    }
                 },
                 onUnsupported: () => {
                     setPlayingState(false);
@@ -5552,6 +5637,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!started) return;
             
             setPlayingState(true);
+            // Счётчик кругов: показываем, какой повтор идёт и сколько всего
+            staffManager.updateLoopCounter();
             
             if (staffManager.loopPlayback) {
                 staffManager.updateStatus(t('status.playingLoop', {
@@ -5572,9 +5659,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // Новое проигрывание - счёт кругов с нуля
+        staffManager.loopCount = 0;
+
         // Включён отсчёт - сначала три секунды с цифрами, потом игра
         if (staffManager.countIn) {
-            staffManager.runCountIn(() => start());
+            staffManager.runCountIn(() => start(), sequence[0]);
         } else {
             start();
         }
@@ -5760,6 +5850,7 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.melodyPlayer.stop();
         staffManager.highlightElement(null);
         setPlayingState(false);
+        staffManager.updateLoopCounter(true);
         staffManager.updateStatus(t('status.playStopped'));
     }
     
