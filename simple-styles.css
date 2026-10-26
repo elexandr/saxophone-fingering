@@ -1652,6 +1652,50 @@ body.many-selected .note-anchor .duration-panel {
     border: 1px solid #e2e8f0;
 }
 
+/* Заголовок строки: кнопка отключения и подпись линии */
+.volume-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.volume-mute {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid #d7dee7;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #3f8f5f;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.volume-mute:hover { background: #f0f4f8; }
+
+.volume-mute.muted {
+    color: #b04a4a;
+    border-color: #e7cccc;
+    background: #fdf1f1;
+}
+
+/* Свёрнутый блок: заголовок-переключатель */
+.volume-panel summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    padding: 2px 0;
+    list-style: none;
+}
+
+.volume-panel summary::-webkit-details-marker { display: none; }
+
 .volume-row {
     display: flex;
     flex-direction: column;

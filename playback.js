@@ -310,9 +310,21 @@
 
     // Громкость метронома: 0..1
     MelodyPlayer.prototype.setMetronomeVolume = function (value) {
-        if (this.metronomeGain) {
-            this.metronomeGain.gain.value = Math.max(0, Math.min(1, value));
-        }
+        this.metronomeVolume = Math.max(0, Math.min(1, value));
+        this.applyMetronomeGain();
+    };
+
+    // Кнопка отключения метронома: щелчки приглушаются узлом, поэтому
+    // включать и выключать можно во время игры
+    MelodyPlayer.prototype.applyMetronomeGain = function () {
+        if (!this.metronomeGain) return;
+        var volume = this.metronomeVolume === undefined ? 0.6 : Number(this.metronomeVolume) || 0;
+        this.metronomeGain.gain.value = this.metronomeMuted ? 0 : volume;
+    };
+
+    MelodyPlayer.prototype.setMetronomeMuted = function (muted) {
+        this.metronomeMuted = !!muted;
+        this.applyMetronomeGain();
     };
 
     // Щелчки отсчёта. accentFirst - ударять первую долю: отсчёт длиной в такт
@@ -465,11 +477,10 @@
 
             // Галочка «звук сопровождения» глушит громкость, а не пропускает
             // ноты. Пропущенные ноты терялись навсегда: снял галочку - тишина,
-            // поставил обратно - и включать уже нечего
-            if (typeof document !== 'undefined') {
-                var checkbox = document.getElementById('sound-accompaniment');
-                if (checkbox) self.setAccompanimentMuted(!checkbox.checked);
-            }
+            // поставил обратно - и включать уже нечего.
+            // Состояние берём своё, а не из разметки: страница не обязана
+            // знать про эти узлы, да и в проверках разметки может не быть
+            self.setAccompanimentMuted(!!self.accompanimentMuted);
 
             var horizon = ctx.currentTime + 2.0;
             while (accIndex < accNotes.length) {
@@ -550,6 +561,9 @@
         var beatSeconds = 60 / (tempo > 0 ? tempo : 80);
         var beatsPerBar = options.beatsPerBar > 0 ? options.beatsPerBar : 4;
         var metronomeOn = !!options.metronome;
+        // Новая игра: щелчки снова слышны, если метроном включён
+        this.metronomeMuted = !metronomeOn;
+        this.applyMetronomeGain();
         var metronomeStart = ctx.currentTime + leadIn;
         var metronomeTotal = metronomeOn ? Math.round((cursor - metronomeStart) / beatSeconds) : -1;
         var metronomeBeat = 0;

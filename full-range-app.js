@@ -60,6 +60,8 @@ class FullRangeStaffManager {
         this.accompaniment = []; // ноты сопровождения: играются, но не показываются
         this.accompanimentSettings = {}; // громкость и отключение по дорожкам
         this.mainVolume = 1;             // громкость основной линии
+        this.mainMuted = false;          // кнопка отключения основной линии
+        this.accompanimentMuted = false; // кнопка отключения всего сопровождения
         this.accompanimentVolume = 1;    // общая громкость сопровождения
         this.accompanimentShift = 0;     // сдвиг только сопровождения, полутонов
         this.allTransposeShift = 0;      // на сколько сдвинули все ноты кнопками «Все вверх/вниз»
@@ -294,20 +296,7 @@ class FullRangeStaffManager {
             });
         }
 
-        
-document.getElementById('metronome-on').addEventListener('change', (e) => {
-        
-    staffManager.metronome = e.target.checked;
-        
-    staffManager.metronomeVolume = parseInt(document.getElementById('metronome-volume').value, 10) / 100;
-        
-    staffManager.melodyPlayer.setMetronomeVolume(staffManager.metronomeVolume);
-        
-    staffManager.scheduleAutosave();
-        
-});
-
-        
+        // Громкость метронома: включение и выключение - кнопка в блоке громкости
 document.getElementById('metronome-volume').addEventListener('input', (e) => {
         
     staffManager.metronomeVolume = parseInt(e.target.value, 10) / 100;
@@ -325,25 +314,29 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
 });
 
-        // Галочки звука действуют сразу, в том числе во время игры: они меняют
-        // громкость готовых узлов, а не перепланируют ноты. Раньше «звук
-        // сопровождения» можно было снять, но не вернуть - ноты при снятии
-        // пропускались навсегда
-        const soundMain = document.getElementById('sound-main');
-        if (soundMain) {
-            soundMain.addEventListener('change', (e) => {
-                if (staffManager.melodyPlayer) staffManager.melodyPlayer.setMainMuted(!e.target.checked);
+        // Кнопки отключения в блоке громкости действуют сразу, в том числе во
+        // время игры: они меняют громкость готовых узлов, а не перепланируют ноты
+        const mainMute = document.getElementById('main-mute');
+        if (mainMute) mainMute.onclick = () => staffManager.toggleSound('main');
+
+        const accompanimentMute = document.getElementById('accompaniment-mute');
+        if (accompanimentMute) accompanimentMute.onclick = () => staffManager.toggleSound('accompaniment');
+
+        const metronomeMute = document.getElementById('metronome-mute');
+        if (metronomeMute) metronomeMute.onclick = () => staffManager.toggleSound('metronome');
+
+        // Блок громкости помнит, открыт он или закрыт
+        const volumePanel = document.getElementById('accompaniment-panel');
+        if (volumePanel) {
+            volumePanel.addEventListener('toggle', () => {
+                staffManager.volumePanelOpen = volumePanel.open;
+                staffManager.scheduleAutosave();
             });
         }
 
-        const soundAccompaniment = document.getElementById('sound-accompaniment');
-        if (soundAccompaniment) {
-            soundAccompaniment.addEventListener('change', (e) => {
-                if (staffManager.melodyPlayer) {
-                    staffManager.melodyPlayer.setAccompanimentMuted(!e.target.checked);
-                }
-            });
-        }
+        // Здесь ещё рано обращаться к staffManager: его создают после
+        // конструктора, поэтому работаем через this
+        this.applySoundButtons();
 
         this.bindLanguageSwitch();
         this.bindModal('about-modal', 'btn-about');
@@ -527,6 +520,54 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (field && parseInt(field.value, 10) !== repeats) field.value = repeats;
 
         return repeats;
+    }
+
+    // Кнопки отключения в блоке громкости: основная линия, всё сопровождение
+    // и метроном. Работают сразу, в том числе во время игры
+    toggleSound(kind) {
+        if (kind === 'main') {
+            this.mainMuted = !this.mainMuted;
+            if (this.melodyPlayer) this.melodyPlayer.setMainMuted(this.mainMuted);
+        } else if (kind === 'accompaniment') {
+            this.accompanimentMuted = !this.accompanimentMuted;
+            if (this.melodyPlayer) this.melodyPlayer.setAccompanimentMuted(this.accompanimentMuted);
+        } else if (kind === 'metronome') {
+            this.metronome = !this.metronome;
+            if (this.melodyPlayer) this.melodyPlayer.setMetronomeMuted(!this.metronome);
+        }
+
+        this.applySoundButtons();
+        this.scheduleAutosave();
+    }
+
+    // Вид кнопок: значок и подсказка показывают, звучит линия или выключена
+    applySoundButtons() {
+        const paint = (id, muted) => {
+            const button = document.getElementById(id);
+            if (!button) return;
+            button.setAttribute('aria-pressed', muted ? 'true' : 'false');
+            button.classList.toggle('muted', !!muted);
+            const icon = button.querySelector('i');
+            if (icon) icon.className = muted ? 'fas fa-volume-xmark' : 'fas fa-volume-high';
+            button.title = muted ? t('setting.unmute.hint') : t('setting.mute.hint');
+        };
+
+        paint('main-mute', this.mainMuted);
+        paint('accompaniment-mute', this.accompanimentMuted);
+        // Метроном по умолчанию выключен, поэтому кнопка показывает выключенный вид
+        paint('metronome-mute', !this.metronome);
+    }
+
+    // Состояние кнопок из сохранения: громкость и отключения
+    applyVolumeState(settings) {
+        if (settings.mainMuted !== undefined) this.mainMuted = !!settings.mainMuted;
+        if (settings.accompanimentMuted !== undefined) this.accompanimentMuted = !!settings.accompanimentMuted;
+        if (this.melodyPlayer) {
+            this.melodyPlayer.setMainMuted(this.mainMuted);
+            this.melodyPlayer.setAccompanimentMuted(this.accompanimentMuted);
+            this.melodyPlayer.setMetronomeMuted(!this.metronome);
+        }
+        this.applySoundButtons();
     }
 
     // Счётчик повторов: виден во время игры по кругу, после остановки гаснет
@@ -3996,6 +4037,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 trackName: note.trackName
             })),
             accompanimentSettings: this.accompanimentSettings || {},
+            mainMuted: this.mainMuted,
+            accompanimentMuted: this.accompanimentMuted,
+            volumePanelOpen: this.volumePanelOpen,
             mainVolume: this.mainVolume,
             accompanimentVolume: this.accompanimentVolume,
             accompanimentShift: this.accompanimentShift,
@@ -4787,6 +4831,14 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             this.accompaniment = Array.isArray(data.accompaniment) ? data.accompaniment : [];
             this.accompanimentSettings = data.accompanimentSettings || {};
             this.mainVolume = typeof data.mainVolume === 'number' ? data.mainVolume : 1;
+            this.mainMuted = !!data.mainMuted;
+            this.accompanimentMuted = !!data.accompanimentMuted;
+            // Блок громкости открыт или закрыт - так, как его оставили
+            if (data.volumePanelOpen !== undefined) {
+                const volumePanel = document.getElementById('accompaniment-panel');
+                if (volumePanel) volumePanel.open = !!data.volumePanelOpen;
+            }
+            this.applySoundButtons();
             this.accompanimentVolume = typeof data.accompanimentVolume === 'number'
                 ? data.accompanimentVolume : 1;
             this.accompanimentShift = typeof data.accompanimentShift === 'number'
@@ -5623,8 +5675,8 @@ document.addEventListener('DOMContentLoaded', () => {
             playOptions.accompanimentTracks = staffManager.accompanimentSettings;
             playOptions.accompanimentVolume = staffManager.accompanimentVolume;
             playOptions.mainVolume = staffManager.mainVolume;
-            playOptions.muteMain = !((document.getElementById('sound-main') || { checked: true }).checked);
-            playOptions.muteAccompaniment = !!(document.getElementById('sound-accompaniment') && !document.getElementById('sound-accompaniment').checked);
+            playOptions.muteMain = !!staffManager.mainMuted;
+            playOptions.muteAccompaniment = !!staffManager.accompanimentMuted;
 
             const started = staffManager.melodyPlayer.play(sequence, staffManager.tempo, {
                 onElement: (index, element) => {
