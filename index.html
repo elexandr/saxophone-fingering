@@ -9,7 +9,7 @@
     <meta name="referrer" content="no-referrer">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <title data-i18n="app.docTitle">Saxophone Fingering Assistant</title>
-    <link rel="stylesheet" href="simple-styles.css?v=1.9.5">
+    <link rel="stylesheet" href="simple-styles.css?v=1.9.6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -102,27 +102,38 @@
 
                             <i class="fas fa-music"></i> <span data-i18n="setting.soundAccompaniment">Аккомпанемент</span>
                         </label>
-
-                        <details id="accompaniment-panel" class="accompaniment-panel" hidden>
-                            <summary data-i18n="panel.accompaniment">Громкость сопровождения</summary>
-                            <div class="accompaniment-master">
-                                <span data-i18n="panel.accompanimentMaster">Общая</span>
-                                <input type="range" id="accompaniment-volume" min="0" max="100" value="100">
-                            </div>
-                            <div id="accompaniment-tracks"></div>
-                        </details>
                         <label class="checkbox-label" for="metronome-on" data-i18n-title="setting.metronome.hint">
                             <input type="checkbox" id="metronome-on">
                             <i class="fas fa-stopwatch"></i> <span data-i18n="setting.metronome">Метроном</span>
                         </label>
-                        <input type="range" id="metronome-volume" min="0" max="100" value="60" class="slider"
-                               data-i18n-title="setting.metronome.volumeHint">
+
+                        <!-- Громкость всех трёх линий в одном месте и всегда доступна:
+                             у основной линии раньше не было ползунка вовсе, а громкость
+                             сопровождения пряталась вместе с панелью, когда сопровождения нет -->
+                        <div id="accompaniment-panel" class="volume-panel">
+                            <div class="volume-row">
+                                <label for="main-volume" data-i18n="setting.mainVolume">Основная линия</label>
+                                <input type="range" id="main-volume" min="0" max="100" value="100"
+                                       data-i18n-title="setting.mainVolume.hint">
+                            </div>
+                            <div class="volume-row">
+                                <label for="accompaniment-volume" data-i18n="setting.accompanimentVolume">Сопровождение</label>
+                                <input type="range" id="accompaniment-volume" min="0" max="100" value="100"
+                                       data-i18n-title="setting.accompanimentVolume.hint">
+                            </div>
+                            <div id="accompaniment-tracks" hidden></div>
+                            <div class="volume-row">
+                                <label for="metronome-volume" data-i18n="setting.metronomeVolume">Метроном</label>
+                                <input type="range" id="metronome-volume" min="0" max="100" value="60" class="slider"
+                                       data-i18n-title="setting.metronome.volumeHint">
+                            </div>
+                        </div>
                     </div>
 
                     <div class="setting-group">
                         <label class="checkbox-label" for="count-in-on" data-i18n-title="setting.countIn.hint">
                             <input type="checkbox" id="count-in-on">
-                            <i class="fas fa-hourglass-start"></i> <span data-i18n="setting.countIn">Отсчёт перед началом</span>
+                            <i class="fas fa-hourglass-start"></i> <span data-i18n="setting.countIn">Отсчёт</span>
                         </label>
                     </div>
                     <div class="control-group">
@@ -382,7 +393,7 @@
                 <span id="status-message" data-i18n="status.ready">Готов к работе. Кликните на маркер позиции, чтобы добавить ноту.</span>
                 <span id="cache-status" class="cache-status"></span>
                 <span class="app-file" id="current-file" hidden></span>
-            <span class="app-version">v1.9.5</span>
+            <span class="app-version">v1.9.6</span>
             </div>
         </footer>
     </div>
@@ -545,13 +556,13 @@
     </div>
 
     <!-- Скрипты -->
-    <script src="i18n.js?v=1.9.5"></script>
-    <script src="note-symbols.js?v=1.9.5"></script>
-    <script src="playback.js?v=1.9.5"></script>
-    <script src="image-cache.js?v=1.9.5"></script>
-    <script src="midi.js?v=1.9.5"></script>
-    <script src="musicxml.js?v=1.9.5"></script>
-    <script src="full-range-app.js?v=1.9.5"></script>
+    <script src="i18n.js?v=1.9.6"></script>
+    <script src="note-symbols.js?v=1.9.6"></script>
+    <script src="playback.js?v=1.9.6"></script>
+    <script src="image-cache.js?v=1.9.6"></script>
+    <script src="midi.js?v=1.9.6"></script>
+    <script src="musicxml.js?v=1.9.6"></script>
+    <script src="full-range-app.js?v=1.9.6"></script>
     <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){

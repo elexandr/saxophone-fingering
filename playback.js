@@ -430,8 +430,12 @@
         // можно переключать во время игры. Раньше при снятой галочке ноты
         // не ставились вовсе, и включить её в середине пьесы было нечем
         this.mainMuted = !!options.muteMain;
+        // Громкость основной линии - своя, отдельно от сопровождения
+        this.mainVolume = options.mainVolume === undefined
+            ? 1
+            : Math.max(0, Math.min(1, Number(options.mainVolume) || 0));
         this.melodyBus = ctx.createGain();
-        this.melodyBus.gain.value = this.mainMuted ? 0 : 1;
+        this.melodyBus.gain.value = this.mainMuted ? 0 : this.mainVolume;
         this.melodyBus.connect(this.master);
 
         function trackBus(trackIndex, trackName) {
@@ -646,7 +650,8 @@
         // состояние, иначе перепланирование вернуло бы старое
         var options = Object.assign({}, this.lastPlay.options, {
             muteMain: !!this.mainMuted,
-            muteAccompaniment: !!this.accompanimentMuted
+            muteAccompaniment: !!this.accompanimentMuted,
+            mainVolume: this.mainVolume
         });
 
         // Сопровождение продолжает с текущего места, а не с начала пьесы
@@ -681,10 +686,22 @@
         this.applyAccompanimentGain();
     };
 
-    // Галочка «звук основной линии»
+    // Громкость и галочка «звук основной линии»: меняются значения узла,
+    // поэтому действуют сразу и во время игры
+    MelodyPlayer.prototype.applyMainGain = function () {
+        if (!this.melodyBus) return;
+        var volume = this.mainVolume === undefined ? 1 : Number(this.mainVolume) || 0;
+        this.melodyBus.gain.value = this.mainMuted ? 0 : volume;
+    };
+
+    MelodyPlayer.prototype.setMainVolume = function (value) {
+        this.mainVolume = Math.max(0, Math.min(1, Number(value) || 0));
+        this.applyMainGain();
+    };
+
     MelodyPlayer.prototype.setMainMuted = function (muted) {
         this.mainMuted = !!muted;
-        if (this.melodyBus) this.melodyBus.gain.value = this.mainMuted ? 0 : 1;
+        this.applyMainGain();
     };
 
     MelodyPlayer.prototype.applyTrackGain = function (bus) {

@@ -1641,11 +1641,38 @@ body.many-selected .note-anchor .duration-panel {
 .fine-body[hidden] {
     display: none;
 }
-/* Панель сопровождения: общая громкость и строка на каждую дорожку */
-.accompaniment-panel { margin: 8px 0; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); }
-.accompaniment-panel summary { cursor: pointer; font-weight: 600; font-size: 13px; }
-.accompaniment-master { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 12px; }
-.accompaniment-master input[type="range"] { flex: 1; min-width: 40px; }
-.accompaniment-track { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 12px; }
-.accompaniment-name { flex: 0 0 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.accompaniment-track input[type="range"] { flex: 1; min-width: 40px; }
+/* Панель громкости: основная линия, сопровождение (и его дорожки), метроном.
+   Видна всегда, даже когда сопровождения в файле нет */
+.volume-panel {
+    box-sizing: border-box;
+    margin: 8px 0 0;
+    padding: 4px 8px 8px;
+    border-radius: 6px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+}
+
+.volume-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 6px 0;
+    font-size: 12px;
+    color: #495057;
+}
+
+.volume-row label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.volume-row input[type="range"] {
+    width: 100%;
+    margin: 0;
+}
+
+.accompaniment-track { display: flex; align-items: center; gap: 6px; margin: 3px 0 3px 8px; font-size: 11px; }
+.accompaniment-name { flex: 0 0 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.accompaniment-track input[type="range"] { flex: 1; min-width: 36px; }
+

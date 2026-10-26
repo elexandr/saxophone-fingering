@@ -59,6 +59,7 @@ class FullRangeStaffManager {
         this.keyFifths = 0; // тональность: сколько знаков при ключе
         this.accompaniment = []; // ноты сопровождения: играются, но не показываются
         this.accompanimentSettings = {}; // громкость и отключение по дорожкам
+        this.mainVolume = 1;             // громкость основной линии
         this.accompanimentVolume = 1;    // общая громкость сопровождения
         this.accompanimentShift = 0;     // сдвиг только сопровождения, полутонов
         this.allTransposeShift = 0;      // на сколько сдвинули все ноты кнопками «Все вверх/вниз»
@@ -3995,6 +3996,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 trackName: note.trackName
             })),
             accompanimentSettings: this.accompanimentSettings || {},
+            mainVolume: this.mainVolume,
             accompanimentVolume: this.accompanimentVolume,
             accompanimentShift: this.accompanimentShift,
             timestamp: new Date().toISOString(),
@@ -4593,7 +4595,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         });
         const keys = Object.keys(names);
 
-        panel.hidden = keys.length === 0;
+        // Панель громкости видна всегда: громкость основной линии нужна и без
+        // сопровождения. Прячем только строки дорожек, когда их нет
+        panel.hidden = false;
+        list.hidden = keys.length === 0;
         if (master) master.value = String(Math.round(this.accompanimentVolume * 100));
         list.innerHTML = '';
 
@@ -4645,6 +4650,18 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 if (staffManager.melodyPlayer) {
                     staffManager.melodyPlayer.setAccompanimentVolume(staffManager.accompanimentVolume);
                 }
+            };
+        }
+        // Громкость основной линии: доступна всегда, сопровождения может и не быть
+        const mainVolume = document.getElementById('main-volume');
+        if (mainVolume) {
+            mainVolume.value = String(Math.round(staffManager.mainVolume * 100));
+            mainVolume.oninput = () => {
+                staffManager.mainVolume = Number(mainVolume.value) / 100;
+                if (staffManager.melodyPlayer) {
+                    staffManager.melodyPlayer.setMainVolume(staffManager.mainVolume);
+                }
+                staffManager.scheduleAutosave();
             };
         }
         // Сдвиг только сопровождения: общий сдвиг двигает и его тоже
@@ -4769,15 +4786,19 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             // сопровождение: возвращаем его обратно из сохранения
             this.accompaniment = Array.isArray(data.accompaniment) ? data.accompaniment : [];
             this.accompanimentSettings = data.accompanimentSettings || {};
+            this.mainVolume = typeof data.mainVolume === 'number' ? data.mainVolume : 1;
             this.accompanimentVolume = typeof data.accompanimentVolume === 'number'
                 ? data.accompanimentVolume : 1;
             this.accompanimentShift = typeof data.accompanimentShift === 'number'
                 ? data.accompanimentShift : 0;
+            const mainVolumeField = document.getElementById('main-volume');
+            if (mainVolumeField) mainVolumeField.value = String(Math.round(this.mainVolume * 100));
             const accShiftField = document.getElementById('accompaniment-shift');
             if (accShiftField) accShiftField.value = String(this.accompanimentShift);
             const accVolumeField = document.getElementById('accompaniment-volume');
             if (accVolumeField) accVolumeField.value = String(Math.round(this.accompanimentVolume * 100));
             if (this.melodyPlayer) {
+                this.melodyPlayer.setMainVolume(this.mainVolume);
                 this.melodyPlayer.setAccompanimentVolume(this.accompanimentVolume);
                 this.melodyPlayer.setAccompanimentTranspose(
                     this.accompanimentShift + this.allTransposeShift);
@@ -5601,6 +5622,7 @@ document.addEventListener('DOMContentLoaded', () => {
             playOptions.accompanimentFromBeat = accompanimentFromBeat;
             playOptions.accompanimentTracks = staffManager.accompanimentSettings;
             playOptions.accompanimentVolume = staffManager.accompanimentVolume;
+            playOptions.mainVolume = staffManager.mainVolume;
             playOptions.muteMain = !((document.getElementById('sound-main') || { checked: true }).checked);
             playOptions.muteAccompaniment = !!(document.getElementById('sound-accompaniment') && !document.getElementById('sound-accompaniment').checked);
 
