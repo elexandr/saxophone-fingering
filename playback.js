@@ -315,8 +315,9 @@
         }
     };
 
-    // Щелчки отсчёта перед началом: последний - как затакт к сильной доле
-    MelodyPlayer.prototype.countInClicks = function (count, secondsEach) {
+    // Щелчки отсчёта. accentFirst - ударять первую долю: отсчёт длиной в такт
+    // начинается с сильной доли, и по ней проще поймать начало
+    MelodyPlayer.prototype.countInClicks = function (count, secondsEach, accentFirst) {
         var ctx = this.ensureContext();
         if (!ctx) return;
 
@@ -326,7 +327,8 @@
         var start = ctx.currentTime + 0.05;
 
         for (var i = 0; i < count; i++) {
-            this.scheduleClick(start + i * step, i === count - 1);
+            var accent = accentFirst ? i === 0 : i === count - 1;
+            this.scheduleClick(start + i * step, accent);
         }
     };
 

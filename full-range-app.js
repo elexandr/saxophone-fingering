@@ -1806,18 +1806,21 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // Короткое звучание одной ноты: при постановке, клике и смене высоты,
     // чтобы сразу слышать, что получается. Во время проигрывания молчим,
     // а при массовой загрузке мелодии - тем более: там нот десятки.
-    // Отсчёт перед началом: три секунды с крупными цифрами по центру.
+    // Отсчёт перед началом: ровно один такт в темпе метронома.
+    // В 4/4 это 4-3-2-1, в 3/4 - 3-2-1, в 2/4 - 2-1: первое число совпадает
+    // с началом такта, дальше идут его доли, и после последней начинается игра.
     // Щелчки идут, только если включён метроном.
     // startElement - с какой ноты пойдёт игра: при повторе это начало круга
     runCountIn(callback, startElement) {
         const overlay = document.getElementById('count-in');
-        const steps = 3;
+        const steps = this.countInSteps();
+        const beatSeconds = this.countInBeatSeconds();
 
         // Экран переводим сразу: за время отсчёта видно, откуда пойдёт игра
         this.followPlayback(startElement || this.notes[0], { instant: true });
 
         if (this.metronome && this.melodyPlayer) {
-            this.melodyPlayer.countInClicks(steps, 1);
+            this.melodyPlayer.countInClicks(steps, beatSeconds, true);
         }
 
         if (!overlay) {
@@ -1839,7 +1842,19 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             }
 
             overlay.textContent = left;
-        }, 1000);
+        }, Math.round(beatSeconds * 1000));
+    }
+
+    // Сколько счётов в отсчёте: целое число долей в такте. В 6/8 метроном
+    // щёлкает четвертями, поэтому и отсчёт идёт по ним же
+    countInSteps() {
+        return Math.max(1, Math.round(this.measureBeats()));
+    }
+
+    // Длина одной доли отсчёта: ровно как у метронома, от темпа
+    countInBeatSeconds() {
+        const tempo = this.tempo > 0 ? this.tempo : 80;
+        return 60 / tempo;
     }
 
     // Снять отсчёт: и таймер, и цифры
@@ -5574,8 +5589,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const playOptions = isRepeat
                 ? {
-                    // После отсчёта ждать ещё две секунды не нужно
-                    leadIn: staffManager.countIn ? 0 : LOOP_PAUSE_SECONDS,
+                    // После отсчёта длиной в такт ждать ещё две секунды не нужно:
+                    // небольшой запас остаётся только на постановку нот
+                    leadIn: staffManager.countIn ? 0.05 : LOOP_PAUSE_SECONDS,
                     tailMs: 0,
                     metronome: staffManager.metronome,
                     beatsPerBar: staffManager.measureBeats()
