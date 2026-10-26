@@ -172,7 +172,7 @@ body {
     cursor: not-allowed;
 }
 
-/* Счётчик повторов: виден во время игры по кругу */
+/* Счётчик повторов: виден всё проигрывание по кругу, включая паузы */
 .loop-counter {
     margin-top: 6px;
     padding: 4px 8px;
@@ -181,6 +181,17 @@ body {
     color: #3a4b8a;
     font-size: 13px;
     text-align: center;
+}
+
+.loop-counter-main {
+    display: block;
+    font-weight: 600;
+}
+
+.loop-counter-left {
+    display: block;
+    font-size: 11px;
+    opacity: 0.75;
 }
 
 .control-section h3 {

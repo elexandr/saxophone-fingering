@@ -79,6 +79,7 @@ class FullRangeStaffManager {
         this.loopPlayback = false;
         this.loopRepeats = 20; // сколько раз играть по кругу
         this.loopCount = 0;    // сколько кругов уже сыграно в этом проигрывании
+        this.loopCounterVisible = false; // счётчик кругов виден всё проигрывание
         // Метроном и отсчёт перед началом
         // Сдвиг звука приложения: насколько звук отличается от нот на стане.
         // Ноль - нота звучит как записана, сдвиги идут уже от загруженного
@@ -585,8 +586,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const counter = document.getElementById('loop-counter');
         if (!counter) return;
 
-        const playing = !!this.melodyPlayer && this.melodyPlayer.playing;
-        if (done || !this.loopPlayback || !playing) {
+        // Видимость счётчика зависит от того, идёт ли проигрывание по кругу,
+        // а не от «звучит ли нота сейчас»: в паузе между кругами и во время
+        // отсчёта плеер уже не играет, а счётчик как раз и нужен
+        if (done || !this.loopPlayback || !this.loopCounterVisible) {
             counter.hidden = true;
             counter.textContent = '';
             return;
@@ -594,8 +597,23 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
         const total = this.loopRepeats || 20;
         const current = Math.min(total, (this.loopCount || 0) + 1);
+        const left = Math.max(0, total - (this.loopCount || 0));
+
         counter.hidden = false;
-        counter.textContent = t('status.loopRepeat', { n: current, total: total });
+        counter.innerHTML = '';
+
+        // Крупно - какой повтор идёт (или пойдёт сразу после паузы),
+        // мелко - сколько кругов ещё осталось
+        const main = document.createElement('span');
+        main.className = 'loop-counter-main';
+        main.textContent = t('status.loopRepeat', { n: current, total: total });
+
+        const rest = document.createElement('span');
+        rest.className = 'loop-counter-left';
+        rest.textContent = t('status.loopLeft', { n: Math.max(0, left - 1) });
+
+        counter.appendChild(main);
+        counter.appendChild(rest);
     }
     
     // === Строки стана ===
@@ -5725,6 +5743,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     staffManager.highlightElement(null);
                     setPlayingState(false);
+                    staffManager.loopCounterVisible = false;
                     staffManager.updateLoopCounter(true);
                     // Если круги кончились по счёту - так и скажем
                     if (staffManager.loopPlayback && staffManager.loopCount >= repeats) {
@@ -5735,6 +5754,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 onUnsupported: () => {
                     setPlayingState(false);
+                    staffManager.loopCounterVisible = false;
+                    staffManager.updateLoopCounter(true);
                     staffManager.updateStatus(t('status.noAudio'));
                 }
             }, playOptions);
@@ -5742,7 +5763,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!started) return;
             
             setPlayingState(true);
-            // Счётчик кругов: показываем, какой повтор идёт и сколько всего
+            // Счётчик кругов виден всё проигрывание по кругу, включая паузы
+            // и отсчёт между кругами: в это время как раз видно, какой повтор
+            // будет следующим и сколько осталось
+            staffManager.loopCounterVisible = true;
             staffManager.updateLoopCounter();
             
             if (staffManager.loopPlayback) {
@@ -5955,6 +5979,7 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.melodyPlayer.stop();
         staffManager.highlightElement(null);
         setPlayingState(false);
+        staffManager.loopCounterVisible = false;
         staffManager.updateLoopCounter(true);
         staffManager.updateStatus(t('status.playStopped'));
     }
