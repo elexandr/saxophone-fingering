@@ -80,6 +80,7 @@ class FullRangeStaffManager {
         this.loopRepeats = 20; // сколько раз играть по кругу
         this.loopCount = 0;    // сколько кругов уже сыграно в этом проигрывании
         this.loopCounterVisible = false; // счётчик кругов виден всё проигрывание
+        this.countInRunning = false;     // отсчёт уже идёт, второй запуск не нужен
         // Метроном и отсчёт перед началом
         // Сдвиг звука приложения: насколько звук отличается от нот на стане.
         // Ноль - нота звучит как записана, сдвиги идут уже от загруженного
@@ -1886,6 +1887,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const steps = this.countInSteps();
         const beatSeconds = this.countInBeatSeconds();
 
+        // Прежний отсчёт снимаем: два таймера запустили бы игру дважды,
+        // и мелодия зацикливалась бы на первой ноте
+        this.clearCountIn();
+        this.countInRunning = true;
+
         // Экран переводим сразу: за время отсчёта видно, откуда пойдёт игра
         this.followPlayback(startElement || this.notes[0], { instant: true });
 
@@ -1894,6 +1900,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }
 
         if (!overlay) {
+            this.clearCountIn();
             callback();
             return;
         }
@@ -1933,6 +1940,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             clearInterval(this.countInTimer);
             this.countInTimer = null;
         }
+
+        this.countInRunning = false;
 
         const overlay = document.getElementById('count-in');
         if (overlay) {
@@ -5648,7 +5657,11 @@ document.addEventListener('DOMContentLoaded', () => {
             staffManager.updateStatus(t('status.addNotesFirst'));
             return;
         }
-        
+
+        // Отсчёт уже идёт - второй запуск не нужен: два таймера начнут игру
+        // дважды, и мелодия будет зацикливаться на первой ноте
+        if (staffManager.countInRunning) return;
+
         // Порядок воспроизведения учитывает репризу: участок играется дважды
         const fullSequence = Playback.buildSequence(staffManager.notes);
         const repeats = Playback.computeRepeatPairs(staffManager.notes).length;
@@ -5760,7 +5773,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, playOptions);
             
-            if (!started) return;
+            if (!started) {
+                // Звук не поднялся: кнопки возвращаем, иначе «Играть» останется
+                // недоступной, а «Стоп» - активной
+                setPlayingState(false);
+                return;
+            }
             
             setPlayingState(true);
             // Счётчик кругов виден всё проигрывание по кругу, включая паузы
@@ -5791,8 +5809,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Новое проигрывание - счёт кругов с нуля
         staffManager.loopCount = 0;
 
-        // Включён отсчёт - сначала три секунды с цифрами, потом игра
+        // Включён отсчёт - сначала такт с цифрами, потом игра. Кнопки сразу
+        // переводим в «играем»: иначе второе нажатие запускало второй отсчёт,
+        // и два таймера начинали игру дважды
         if (staffManager.countIn) {
+            setPlayingState(true);
+            staffManager.loopCounterVisible = true;
+            staffManager.updateLoopCounter();
             staffManager.runCountIn(() => start(), sequence[0]);
         } else {
             start();
@@ -5829,7 +5852,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function toggleMelody() {
-        if (staffManager.melodyPlayer && staffManager.melodyPlayer.playing) {
+        // Отсчёт - это уже начатый запуск: второе нажатие должно останавливать
+        // игру, а не заводить второй отсчёт
+        if ((staffManager.melodyPlayer && staffManager.melodyPlayer.playing) ||
+            staffManager.countInRunning) {
             stopMelody();
         } else {
             playMelody();
