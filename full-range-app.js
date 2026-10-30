@@ -90,9 +90,9 @@ class FullRangeStaffManager {
         // Показывать звучащие ноты: включено - подписи звучащих нот,
         // выключено - написанные (истина тут у пианино)
         this.soundingNames = false;
-        this.metronome = false;
+        this.metronome = true; // по умолчанию щелчки включены
         this.metronomeVolume = 0.6;
-        this.countIn = false; // Играть по кругу
+        this.countIn = true; // отсчёт перед началом включён по умолчанию
         this.timeSignature = DEFAULT_TIME_SIGNATURE; // Размер такта
         this.barLineMode = 'auto'; // 'auto' - черты по размеру, 'manual' - вручную
         this.notationMarks = []; // Элементы тактовых черт и знаков репризы
@@ -4470,6 +4470,25 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
         if (settings.loopRepeats !== undefined) {
             this.setLoopRepeats(settings.loopRepeats);
+        }
+
+        // Метроном и отсчёт сохраняются вместе с остальными настройками:
+        // после обновления страницы они остаются такими, как их оставили
+        if (settings.countIn !== undefined) {
+            this.countIn = !!settings.countIn;
+            const countInBox = document.getElementById('count-in-on');
+            if (countInBox) countInBox.checked = this.countIn;
+        }
+
+        if (settings.metronome !== undefined) {
+            this.setMetronome(!!settings.metronome);
+        }
+
+        if (settings.metronomeVolume !== undefined) {
+            this.metronomeVolume = Math.max(0, Math.min(1, Number(settings.metronomeVolume) || 0));
+            const metronomeSlider = document.getElementById('metronome-volume');
+            if (metronomeSlider) metronomeSlider.value = String(Math.round(this.metronomeVolume * 100));
+            if (this.melodyPlayer) this.melodyPlayer.setMetronomeVolume(this.metronomeVolume);
         }
         
         if (settings.displayMode) {
