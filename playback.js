@@ -221,6 +221,18 @@
     // Одна нота: две расстроенные пилы через фильтр, огибающая и вибрато.
     MelodyPlayer.prototype.scheduleNote = function (frequency, startAt, durationSec, destination) {
         var ctx = this.ctx;
+
+        // Время никогда не уходит в прошлое и не бывает отрицательным:
+        // на таком значении браузер выбрасывает RangeError и порция нот
+        // остаётся непоставленной - звук вставал на одном месте
+        var safeStart = Number(startAt);
+        if (!isFinite(safeStart)) safeStart = ctx.currentTime;
+        startAt = Math.max(safeStart, ctx.currentTime + 0.001);
+
+        var safeDuration = Number(durationSec);
+        if (!isFinite(safeDuration) || safeDuration <= 0) safeDuration = 0.05;
+        durationSec = Math.max(0.05, safeDuration);
+
         var attack = 0.025;
         var release = 0.09;
         var end = startAt + durationSec;
@@ -267,10 +279,30 @@
         lfo.stop(stopAt);
 
         var voices = [osc1, osc2, lfo];
-        this.voices.push.apply(this.voices, voices);
+        // Отзвучавший голос убираем из списка: иначе за длинную пьесу в нём
+        // копятся тысячи уже остановленных узлов, растёт память и появляются
+        // паузы - ближе к концу проигрывание начинает заикаться
+        this.trackVoices(voices);
 
         // Возвращаем голоса: вызывающий может погасить звук раньше срока
         return voices;
+    };
+
+    // Держим в списке только звучащие голоса: как только узел отзвучал,
+    // он исчезает из списка и может быть собран сборщиком мусора
+    MelodyPlayer.prototype.trackVoices = function (voices) {
+        var self = this;
+
+        voices.forEach(function (voice) {
+            if (!voice) return;
+
+            voice.onended = function () {
+                var index = self.voices.indexOf(voice);
+                if (index >= 0) self.voices.splice(index, 1);
+            };
+        });
+
+        this.voices.push.apply(this.voices, voices);
     };
 
     // elements: [{ noteName, duration, dotted, isRest }], handlers: { onElement, onEnd, onUnsupported }
@@ -289,6 +321,11 @@
         var ctx = this.ctx;
         if (!ctx) return;
 
+        // Как и у нот: время щелчка не может быть в прошлом
+        var safeStart = Number(startAt);
+        if (!isFinite(safeStart)) safeStart = ctx.currentTime;
+        startAt = Math.max(safeStart, ctx.currentTime + 0.001);
+
         var osc = ctx.createOscillator();
         var gain = ctx.createGain();
 
@@ -305,7 +342,7 @@
 
         osc.start(startAt);
         osc.stop(startAt + 0.08);
-        this.voices.push(osc);
+        this.trackVoices([osc]);
     };
 
     // Громкость метронома: 0..1
@@ -499,7 +536,22 @@
                     accIndex++;
                     continue;
                 }
-                var startAt = startCursor + (noteBeat - accFromBeat) * secondsPerBeat;
+
+                // Нота могла начаться ДО места старта и ещё звучать (например,
+                // длинный аккорд на стыке фрагмента). Такое начало уходило
+                // в прошлое, вплоть до отрицательного времени, и браузер падал
+                // на setValueAtTime - вместе с падением вставала вся порция.
+                // Играем её с места старта, укоротив на уже прошедшую часть
+                var offsetBeats = noteBeat - accFromBeat;
+                var startAt = startCursor;
+                var noteSeconds = (note.beats || 1) * secondsPerBeat;
+
+                if (offsetBeats >= 0) {
+                    startAt = startCursor + offsetBeats * secondsPerBeat;
+                } else {
+                    noteSeconds = Math.max(0.05, noteSeconds + offsetBeats * secondsPerBeat);
+                }
+
                 if (startAt > horizon) break;
                 accIndex++;
 
@@ -521,7 +573,7 @@
                 // и полем «Сдвиг сопровождения»
                 var shift = self.accompanimentTranspose || 0;
                 var frequency = 440 * Math.pow(2, (note.midi + shift - 69) / 12);
-                self.scheduleNote(frequency, startAt, (note.beats || 1) * secondsPerBeat * 0.98, bus.gain);
+                self.scheduleNote(frequency, startAt, noteSeconds * 0.98, bus.gain);
             }
             if (accIndex < accNotes.length) {
                 // Таймер кладём в общий список: stop() его очистит
@@ -581,32 +633,38 @@
             if (!self.playing) return;
             var horizon = ctx.currentTime + 2.0;
 
-            while (melodyIndex < timeline.length) {
-                var step = timeline[melodyIndex];
-                if (step.startAt > horizon) break;
-                melodyIndex++;
+            // Одна плохая нота не должна останавливать проигрывание: раньше
+            // исключение внутри порции обрывало всю цепочку, а звук замолкал
+            try {
+                while (melodyIndex < timeline.length) {
+                    var step = timeline[melodyIndex];
+                    if (step.startAt > horizon) break;
+                    melodyIndex++;
 
-                // Основную линию можно выключить: подсветка при этом работает,
-                // потому что она идёт по времени, а не по звуку
-                if (step.skip || step.element.isRest) continue;
-                var frequency = noteToFrequency(step.element.noteName, self.transpose);
-                if (!frequency) continue;
-                self.scheduleNote(frequency, step.startAt,
-                    step.seconds * (step.joined ? 1 : 0.92), self.melodyBus);
-            }
-
-            if (self.metronomeLive) {
-                // Догоняем текущую долю: если метроном включили в середине игры,
-                // щелчки начинаются с ближайшей доли, а не с начала пьесы
-                var nowBeat = Math.floor((ctx.currentTime - metronomeStart) / beatSeconds);
-                if (metronomeBeat < nowBeat) metronomeBeat = nowBeat + 1;
-
-                while (metronomeBeat <= metronomeTotal) {
-                    var clickAt = metronomeStart + metronomeBeat * beatSeconds;
-                    if (clickAt > horizon) break;
-                    self.scheduleClick(clickAt, metronomeBeat % beatsPerBar === 0);
-                    metronomeBeat++;
+                    // Основную линию можно выключить: подсветка при этом работает,
+                    // потому что она идёт по времени, а не по звуку
+                    if (step.skip || step.element.isRest) continue;
+                    var frequency = noteToFrequency(step.element.noteName, self.transpose);
+                    if (!frequency) continue;
+                    self.scheduleNote(frequency, step.startAt,
+                        step.seconds * (step.joined ? 1 : 0.92), self.melodyBus);
                 }
+
+                if (self.metronomeLive) {
+                    // Догоняем текущую долю: если метроном включили в середине игры,
+                    // щелчки начинаются с ближайшей доли, а не с начала пьесы
+                    var nowBeat = Math.floor((ctx.currentTime - metronomeStart) / beatSeconds);
+                    if (metronomeBeat < nowBeat) metronomeBeat = nowBeat + 1;
+
+                    while (metronomeBeat <= metronomeTotal) {
+                        var clickAt = metronomeStart + metronomeBeat * beatSeconds;
+                        if (clickAt > horizon) break;
+                        self.scheduleClick(clickAt, metronomeBeat % beatsPerBar === 0);
+                        metronomeBeat++;
+                    }
+                }
+            } catch (error) {
+                self.lastScheduleError = String(error && error.message || error);
             }
 
             var melodyLeft = melodyIndex < timeline.length;
