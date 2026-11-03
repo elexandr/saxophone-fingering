@@ -172,6 +172,101 @@ body {
     cursor: not-allowed;
 }
 
+/* Фрагмент для разучивания: кнопки отметок и метки на стане */
+.fragment-group {
+    margin-top: 8px;
+}
+
+.fragment-row {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-mini {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 5px 6px;
+    font-size: 11px;
+    color: #2d3748;
+    background: #ffffff;
+    border: 1px solid #cbd5e0;
+    border-radius: 5px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.btn-mini:hover:not(:disabled) { background: #f0f4f8; }
+
+.btn-mini:disabled {
+    color: #a8b2bd;
+    background: #f4f6f8;
+    cursor: not-allowed;
+}
+
+.btn-mini-wide {
+    width: 100%;
+    margin-top: 6px;
+}
+
+.fragment-info {
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: #eaf4ec;
+    color: #2f6b45;
+    font-size: 11px;
+    text-align: center;
+}
+
+/* Метки на стане: начало, конец и весь участок фрагмента.
+   Сам .note-anchor нулевого размера, поэтому красим не его, а рамку
+   вокруг головки (halo) и подпись ноты */
+.note-anchor.in-fragment .glyph-halo {
+    opacity: 1;
+    stroke: #4c6ef5;
+    stroke-opacity: 0.3;
+    stroke-dasharray: none;
+    stroke-width: 1;
+}
+
+.note-anchor.in-fragment .note-label {
+    border-color: #b9c6fb;
+    color: #3a4b8a;
+}
+
+.note-anchor.fragment-start .glyph-halo {
+    opacity: 1;
+    stroke: #4c6ef5;
+    stroke-opacity: 1;
+    stroke-dasharray: none;
+    stroke-width: 3;
+}
+
+.note-anchor.fragment-start .note-label {
+    border-color: #4c6ef5;
+    background: #4c6ef5;
+    color: #ffffff;
+}
+
+.note-anchor.fragment-end .glyph-halo {
+    opacity: 1;
+    stroke: #f59f00;
+    stroke-opacity: 1;
+    stroke-dasharray: none;
+    stroke-width: 3;
+}
+
+.note-anchor.fragment-end .note-label {
+    border-color: #f59f00;
+    background: #f59f00;
+    color: #ffffff;
+}
+
 /* Счётчик повторов: виден всё проигрывание по кругу, включая паузы */
 .loop-counter {
     margin-top: 6px;

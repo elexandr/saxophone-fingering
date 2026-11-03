@@ -81,6 +81,8 @@ class FullRangeStaffManager {
         this.loopCount = 0;    // сколько кругов уже сыграно в этом проигрывании
         this.loopCounterVisible = false; // счётчик кругов виден всё проигрывание
         this.countInRunning = false;     // отсчёт уже идёт, второй запуск не нужен
+        this.fragmentStartId = null;     // первая нота разучиваемого фрагмента
+        this.fragmentEndId = null;       // последняя нота фрагмента
         // Метроном и отсчёт перед началом
         // Сдвиг звука приложения: насколько звук отличается от нот на стане.
         // Ноль - нота звучит как записана, сдвиги идут уже от загруженного
@@ -347,6 +349,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.updateLanguageButtons();
         this.updateBarLineButtons();
         this.updateNotationButtons();
+        this.updateFragmentButtons();
 
         // При выделении двух и более нот окошко длительности на ноте убираем:
         // длительность меняют кнопки в панели, а точки остаются точечной правкой
@@ -580,6 +583,172 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             this.melodyPlayer.setMetronomeLive(this.metronome);
         }
         this.applySoundButtons();
+    }
+
+    // === Фрагмент для разучивания ===
+    // Отмечаются две ноты: первая и последняя. Играется только этот участок,
+    // а «по кругу» повторяет его так же, как повторяло бы всю мелодию.
+    // Храним идентификаторы нот: правка мелодии вокруг фрагмент не сдвигает
+
+    hasFragment() {
+        return !!(this.fragmentStartId && this.fragmentEndId);
+    }
+
+    // Номера отмеченных нот в мелодии: нужны для сохранения
+    fragmentIndices() {
+        if (!this.hasFragment()) return null;
+        const start = this.notes.findIndex(note => note.id === this.fragmentStartId);
+        const end = this.notes.findIndex(note => note.id === this.fragmentEndId);
+        if (start < 0 || end < 0) return null;
+        return { start: Math.min(start, end), end: Math.max(start, end) };
+    }
+
+    // Границы фрагмента в порядке воспроизведения: от первой отмеченной ноты
+    // до последней. При репризе элемент встречается дважды, поэтому конец
+    // ищем после начала
+    fragmentBounds(sequence) {
+        if (!this.hasFragment()) return null;
+
+        const startNote = this.notes.find(note => note.id === this.fragmentStartId);
+        const endNote = this.notes.find(note => note.id === this.fragmentEndId);
+        if (!startNote || !endNote) return null;
+
+        const start = sequence.indexOf(startNote);
+        if (start < 0) return null;
+
+        for (let i = start; i < sequence.length; i++) {
+            if (sequence[i] === endNote) return { start: start, end: i };
+        }
+        return null;
+    }
+
+    setFragmentStart(noteId) {
+        const note = this.notes.find(item => item.id === (noteId || this.selectedNoteId));
+        if (!note) {
+            this.updateStatus(t('status.fragmentNeedNote'));
+            return false;
+        }
+
+        // Начало оказалось после конца: границы меняются местами, чтобы
+        // фрагмент остался нормальным - от ранней ноты до поздней
+        const previousEndId = this.fragmentEndId;
+        const noteIndex = this.notes.indexOf(note);
+        const endIndex = this.notes.findIndex(item => item.id === previousEndId);
+
+        if (previousEndId && endIndex >= 0 && noteIndex > endIndex) {
+            this.fragmentStartId = previousEndId;
+            this.fragmentEndId = note.id;
+        } else {
+            this.fragmentStartId = note.id;
+        }
+
+        this.afterFragmentChange();
+        return true;
+    }
+
+    setFragmentEnd(noteId) {
+        const note = this.notes.find(item => item.id === (noteId || this.selectedNoteId));
+        if (!note) {
+            this.updateStatus(t('status.fragmentNeedNote'));
+            return false;
+        }
+
+        // Конец оказался раньше начала: границы меняются местами
+        const previousStartId = this.fragmentStartId;
+        const noteIndex = this.notes.indexOf(note);
+        const startIndex = this.notes.findIndex(item => item.id === previousStartId);
+
+        this.fragmentEndId = note.id;
+        if (previousStartId && startIndex >= 0 && startIndex > noteIndex) {
+            this.fragmentStartId = note.id;
+            this.fragmentEndId = previousStartId;
+        }
+
+        this.afterFragmentChange();
+        return true;
+    }
+
+    clearFragment(silent = false) {
+        this.fragmentStartId = null;
+        this.fragmentEndId = null;
+        this.afterFragmentChange(silent);
+    }
+
+    afterFragmentChange(silent = false) {
+        this.updateFragmentInfo();
+        this.updateFragmentButtons();
+        this.applyFragmentMarks();
+
+        if (silent) return;
+
+        const bounds = this.fragmentIndices();
+        if (!bounds) {
+            this.updateStatus(t('status.fragmentCleared'));
+        } else {
+            // Фрагмент нужен, чтобы играть его много раз, поэтому круг
+            // включаем сразу: снять его можно обычной галочкой
+            if (!this.loopPlayback) this.setLoopPlayback(true);
+            this.updateStatus(t('status.fragmentSet', { from: bounds.start + 1, to: bounds.end + 1 }));
+        }
+        this.scheduleAutosave();
+    }
+
+    // Кнопки фрагмента: отмечать можно только выделенную ноту
+    updateFragmentButtons() {
+        const hasSelection = !!this.notes.find(note => note.id === this.selectedNoteId);
+
+        const startButton = document.getElementById('btn-fragment-start');
+        if (startButton) startButton.disabled = !hasSelection;
+
+        const endButton = document.getElementById('btn-fragment-end');
+        if (endButton) endButton.disabled = !hasSelection;
+
+        const clearButton = document.getElementById('btn-fragment-clear');
+        if (clearButton) clearButton.disabled = !this.hasFragment();
+    }
+
+    // Строка «Фрагмент: ноты 5–12 · 8» в панели
+    updateFragmentInfo() {
+        const info = document.getElementById('fragment-info');
+        if (!info) return;
+
+        // Отмеченные ноты могли удалить - тогда фрагмента больше нет
+        if (this.hasFragment() && !this.fragmentIndices()) {
+            this.fragmentStartId = null;
+            this.fragmentEndId = null;
+        }
+
+        const bounds = this.fragmentIndices();
+        if (!bounds) {
+            info.hidden = true;
+            info.textContent = '';
+            return;
+        }
+
+        info.hidden = false;
+        info.textContent = t('fragment.info', {
+            from: bounds.start + 1,
+            to: bounds.end + 1,
+            count: bounds.end - bounds.start + 1
+        });
+    }
+
+    // Метки на стане: видно, откуда и докуда повторяется фрагмент
+    applyFragmentMarks() {
+        document.querySelectorAll('.note-anchor.fragment-start, .note-anchor.fragment-end, .note-anchor.in-fragment')
+            .forEach(node => node.classList.remove('fragment-start', 'fragment-end', 'in-fragment'));
+
+        const bounds = this.fragmentIndices();
+        if (!bounds) return;
+
+        for (let i = bounds.start; i <= bounds.end; i++) {
+            const note = this.notes[i];
+            const node = note && document.getElementById(note.id);
+            if (!node) continue;
+            node.classList.add('in-fragment');
+            if (i === bounds.start) node.classList.add('fragment-start');
+            if (i === bounds.end) node.classList.add('fragment-end');
+        }
     }
 
     // Счётчик повторов: виден во время игры по кругу, после остановки гаснет
@@ -1373,6 +1542,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.updateNoteCount();
         this.updateAllFingerings();
         this.updateFileButtons();
+        this.applyFragmentMarks();
+        this.updateFragmentInfo();
+        this.updateFragmentButtons();
     }
     
     // На пустом стане сохранять нечего, поэтому кнопки сохранения гаснут
@@ -1456,6 +1628,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Кнопки тактовых черт и репризы зависят от выделения
         this.updateBarLineButtons();
         this.updateNotationButtons();
+        // Отметки фрагмента ставятся на выделенную ноту
+        this.updateFragmentButtons();
 
         // При выделении двух и более нот окошко длительности на ноте убираем:
         // длительность меняют кнопки в панели, а точки остаются точечной правкой
@@ -1497,6 +1671,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.clearFingering();
         this.updateBarLineButtons();
         this.updateNotationButtons();
+        this.updateFragmentButtons();
 
         // При выделении двух и более нот окошко длительности на ноте убираем:
         // длительность меняют кнопки в панели, а точки остаются точечной правкой
@@ -4077,6 +4252,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             mainMuted: this.mainMuted,
             accompanimentMuted: this.accompanimentMuted,
             volumePanelOpen: this.volumePanelOpen,
+            fragment: this.fragmentIndices(),
             mainVolume: this.mainVolume,
             accompanimentVolume: this.accompanimentVolume,
             accompanimentShift: this.accompanimentShift,
@@ -4891,6 +5067,21 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             // сопровождение: возвращаем его обратно из сохранения
             this.accompaniment = Array.isArray(data.accompaniment) ? data.accompaniment : [];
             this.accompanimentSettings = data.accompanimentSettings || {};
+            // Фрагмент хранится номерами нот: после восстановления
+            // у элементов новые идентификаторы, и номера снова дают отметки
+            const savedFragment = data.fragment;
+            if (savedFragment && Number.isInteger(savedFragment.start) && Number.isInteger(savedFragment.end)) {
+                const startNote = this.notes[savedFragment.start];
+                const endNote = this.notes[savedFragment.end];
+                this.fragmentStartId = startNote ? startNote.id : null;
+                this.fragmentEndId = endNote ? endNote.id : null;
+            } else {
+                this.fragmentStartId = null;
+                this.fragmentEndId = null;
+            }
+            this.updateFragmentInfo();
+            this.updateFragmentButtons();
+            this.applyFragmentMarks();
             this.mainVolume = typeof data.mainVolume === 'number' ? data.mainVolume : 1;
             this.mainMuted = !!data.mainMuted;
             this.accompanimentMuted = !!data.accompanimentMuted;
@@ -5639,6 +5830,24 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-play').addEventListener('click', playMelody);
     document.getElementById('btn-stop').addEventListener('click', stopMelody);
 
+    // Фрагмент для разучивания: отмечаем выделенную ноту началом или концом
+    const fragmentStartButton = document.getElementById('btn-fragment-start');
+    if (fragmentStartButton) {
+        fragmentStartButton.addEventListener('click', () => staffManager.setFragmentStart());
+    }
+
+    const fragmentEndButton = document.getElementById('btn-fragment-end');
+    if (fragmentEndButton) {
+        fragmentEndButton.addEventListener('click', () => staffManager.setFragmentEnd());
+    }
+
+    const fragmentClearButton = document.getElementById('btn-fragment-clear');
+    if (fragmentClearButton) {
+        fragmentClearButton.addEventListener('click', () => staffManager.clearFragment());
+    }
+
+    staffManager.updateFragmentButtons();
+
     // Клик по ноте во время игры переносит проигрывание на это место.
     // Выделение при этом не ставится: пользователь слушает, а не правит
     staffManager.playFromElement = function (element) {
@@ -5686,16 +5895,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const repeats = Playback.computeRepeatPairs(staffManager.notes).length;
         const repeatText = repeats ? t('status.playingRepeat', { n: repeats }) : '';
         
-        // Если нота выделена, начинаем с неё
-        const startIndex = typeof fromIndex === 'number'
-            ? Math.max(0, Math.min(fullSequence.length - 1, fromIndex))
-            : (fromElement
-                ? Math.max(0, fullSequence.indexOf(fromElement))
-                : selectedStartIndex(fullSequence));
+        // Отмеченный фрагмент важнее выделенной ноты: играем только его
+        const fragment = staffManager.fragmentBounds(fullSequence);
+        const startIndex = fragment
+            ? fragment.start
+            : (typeof fromIndex === 'number'
+                ? Math.max(0, Math.min(fullSequence.length - 1, fromIndex))
+                : (fromElement
+                    ? Math.max(0, fullSequence.indexOf(fromElement))
+                    : selectedStartIndex(fullSequence)));
         // Запоминаем, откуда пошло проигрывание: по этому числу стрелки
         // считают, какая нота звучит сейчас, и перескакивают на соседнюю
         staffManager.playStartIndex = startIndex;
-        const sequence = startIndex > 0 ? fullSequence.slice(startIndex) : fullSequence;
+        // Фрагмент режется по последней отмеченной ноте, обычный запуск - до конца
+        const sequence = fragment
+            ? fullSequence.slice(fragment.start, fragment.end + 1)
+            : (startIndex > 0 ? fullSequence.slice(startIndex) : fullSequence);
         const fromText = startIndex > 0 ? t('status.playingFrom') : '';
         
         function start(isRepeat) {
