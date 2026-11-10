@@ -12,7 +12,17 @@ const STAFF_UPPER_LEDGER_COUNT = 4;
 const STAFF_LOWER_LEDGER_COUNT = 4; // до C3: ниже приложение не работает
 const STAFF_TOP_LEDGER = STAFF_MAIN_TOP - STAFF_UPPER_LEDGER_COUNT * STAFF_LINE_SPACING; // 10
 const STAFF_BOTTOM_LEDGER = STAFF_MAIN_BOTTOM + STAFF_LOWER_LEDGER_COUNT * STAFF_LINE_SPACING; // 330
-const STAFF_CLEF_WIDTH = 72; // место под скрипичный ключ и отступ до первой ноты
+// Место под скрипичный ключ и знаки при ключе. Сама ширина зависит от
+// числа знаков, поэтому это не const: её пересчитывает updateClefZone
+// Кегль ключа: раньше был 116px и наезжал на диезы
+const STAFF_CLEF_SIZE = 96;
+// Где заканчивается сам ключ (его чернила) - с этого места идут знаки
+const STAFF_CLEF_INK_RIGHT = 58;
+// Шаг между знаками при ключе
+const STAFF_KEY_STEP = 10;
+// Отступ от последнего знака до первой ноты
+const STAFF_KEY_GAP = 6;
+let STAFF_CLEF_WIDTH = 60; // пересчитывается под текущую тональность
 // Знак ноты рисуется в рамке 60px по центру ноты, то есть на 30px в каждую сторону
 const GLYPH_HALF_WIDTH = 30;
 // Высота ряда аппликатур при полном масштабе: карточка и панель вариантов
@@ -24,6 +34,16 @@ const HISTORY_LIMIT = 50;
 // Alt+вверх и Alt+вниз. Точки в неё не входят: их ставят отдельно, кнопками
 // в окошке длительности
 const DURATION_LADDER = [1, 2, 4, 8, 16];
+// Масштаб всего стана на бумаге: две трети экранного
+const PRINT_SYSTEM_SCALE = 0.67;
+// Ширина карточки аппликатуры на бумаге (до общего масштаба): так на
+// строку А4 встаёт 4-5 тактов, а карточки остаются читаемыми
+const PRINT_IMAGE_SIZE = 48;
+// Сколько места оставляем над станом на высокие ноты и штили
+const PRINT_STAFF_MAX_TOP = 20;
+// Сколько места под станом на бумаге: три линейки до ряда аппликатур
+// (на экране там же лежат подписи нот и запас под прокрутку)
+const PRINT_STAFF_BOTTOM_GAP = 50; // 2,5 линейки: три на экране, на бумаге плотнее
 
 // Отступ от верха области, когда показываем звучащую строку
 const PLAYBACK_SCROLL_MARGIN = 8;
@@ -36,6 +56,20 @@ const LOOP_PAUSE_SECONDS = 2;
 // простым сборщикам адресов, которые читают исходный код страницы.
 const CONTACT_PARTS = ['moc', 'liamg', 'idabis'];
 const DEFAULT_TIME_SIGNATURE = '4/4';
+
+// Версия страницы видна в подвале. По ней отличаем альфу от рабочей версии:
+// оба сайта живут на одном домене, и localStorage у них общий. Без приставки
+// альфа при загрузке подхватывала мелодию рабочей версии и затирала её своим
+// автосохранением
+const APP_VERSION = (function () {
+    if (typeof document === 'undefined') return '';
+    const node = document.querySelector('.app-version');
+    return node ? String(node.textContent || '').trim() : '';
+})();
+
+// Альфа-версия помечена суффиксом вида -a12: у неё отдельный ключ
+const STORAGE_PREFIX = /-a\d+/i.test(APP_VERSION) ? 'alpha-' : '';
+const STORAGE_KEY = STORAGE_PREFIX + 'saxophone-fullrange-data';
 
 // Короткий доступ к переводам: строки интерфейса живут в i18n.js
 function t(key, params) {
@@ -62,6 +96,12 @@ class FullRangeStaffManager {
         this.mainVolume = 1;             // громкость основной линии
         this.mainMuted = false;          // кнопка отключения основной линии
         this.accompanimentMuted = false; // кнопка отключения всего сопровождения
+        // Аудио-аккомпанемент: файл целиком вместо партий из MIDI/MusicXML
+        this.audioTrackBuffer = null;
+        this.audioTrackName = '';
+        this.audioTrackUrl = null;
+        // Сдвиги и скорость аудиодорожки: читаем из браузера
+        this.loadAudioSettings();
         this.accompanimentVolume = 1;    // общая громкость сопровождения
         this.accompanimentShift = 0;     // сдвиг только сопровождения, полутонов
         this.allTransposeShift = 0;      // на сколько сдвинули все ноты кнопками «Все вверх/вниз»
@@ -89,9 +129,19 @@ class FullRangeStaffManager {
         this.appSoundShift = 0;
         // Сдвиг звука инструмента: насколько саксофон звучит выше или ниже аппликатуры
         this.saxShift = 0;
+        // Перенос строк на бумаге: 'measures' - только по границам тактов,
+        // 'notes' - по нотам, тогда такт может начаться на одной строке,
+        // а кончиться на следующей. Выбор помнится между запусками
+        this.printWrap = this.savedPrintWrap();
+        // Масштаб печати в процентах: 100 - тот вид, что подобран для А4
+        this.printScale = this.savedPrintScale();
         // Показывать звучащие ноты: включено - подписи звучащих нот,
         // выключено - написанные (истина тут у пианино)
         this.soundingNames = false;
+        // Черта у форшлагов: как в файле (slash), всегда или никогда.
+        // В конвертированных файлах slash="yes" стоит у всех форшлагов,
+        // а в печатных нотах многие из них идут без черты
+        this.graceSlashMode = 'file';
         this.metronome = true; // по умолчанию щелчки включены
         this.metronomeVolume = 0.6;
         this.countIn = true; // отсчёт перед началом включён по умолчанию
@@ -844,6 +894,17 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.container.appendChild(this.staffTail);
     }
     
+    // Сколько места слева занимает ключ со знаками при ключе
+    updateClefZone() {
+        const count = Math.min(7, Math.abs(Number(this.keyFifths) || 0));
+        // Прежние 72px оставляем как минимум: к ним привыкла вся раскладка.
+        // Знаки при ключе могут потребовать больше места - тогда строка
+        // начинается позже, и ноты не наезжают на ключ
+        const needed = STAFF_CLEF_INK_RIGHT + count * STAFF_KEY_STEP + STAFF_KEY_GAP;
+        STAFF_CLEF_WIDTH = Math.max(72, needed);
+        return STAFF_CLEF_WIDTH;
+    }
+
     // Ширина, доступная под одну строку
     staffWidth() {
         const width = this.container ? this.container.clientWidth : 0;
@@ -857,6 +918,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     
     // Сколько высоты остаётся под строку: окно минус шапка, панель и подвал
     viewportFreeHeight() {
+        // На бумаге высоты хватает: уменьшать стан незачем, иначе
+        // линейки в 2px превращаются в бледную паутинку
+        if (this.printLayout) return 100000;
+
         let chrome = 0;
         ['.app-header', '.staff-header', '.app-footer'].forEach(selector => {
             const node = document.querySelector(selector);
@@ -871,6 +936,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // раскладку, поэтому ширина задаётся обратной долей - и строка
     // по-прежнему занимает всю ширину экрана, просто мельче.
     systemScale() {
+        // На бумаге стан мельче экранного на треть, а выбранный
+        // в окне печати масштаб растягивает или сжимает его от этого вида
+        if (this.printLayout) return PRINT_SYSTEM_SCALE * this.printScale;
+
         const metrics = this.systemMetrics();
         const required = metrics.height + FINGERING_ROW_HEIGHT + 34;
         const available = this.viewportFreeHeight();
@@ -897,8 +966,21 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
     
     // Сколько элементов влезает в одну строку (минус место под ключ)
+    // Ширина под одной нотой: на бумаге карточки мельче, поэтому в
+    // строку влезает не один такт, а три-четыре
+    slotWidth() {
+        const size = this.printLayout ? PRINT_IMAGE_SIZE : this.imageSize;
+        return size + 2;
+    }
+
+    // Высота карточки аппликатуры: на экране 200 px, на бумаге мельче
+    cardHeight() {
+        if (!this.printLayout) return 200;
+        return Math.round(200 * PRINT_IMAGE_SIZE / Math.max(1, this.imageSize));
+    }
+
     elementsPerSystem() {
-        const slot = this.imageSize + 2;
+        const slot = this.slotWidth();
         
         // Знак ноты шире половины шага при узких картинках: он по центру ноты
         // и выступает на 30px вправо. Плюс 2px запаса на разделитель такта.
@@ -929,8 +1011,26 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     
     // Разбивка мелодии на строки. Граница строки - граница такта.
     // Такт, который не влезает в строку целиком, режется принудительно.
+    // Разбивка по нотам: строка режется по счёту нот, поэтому такт может
+    // начаться на одной строке, а кончиться на следующей
+    computeSystemsByNotes() {
+        const perSystem = this.elementsPerSystem();
+        const systems = [];
+
+        for (let index = 0; index < this.notes.length; index += perSystem) {
+            systems.push(this.notes.slice(index, index + perSystem));
+        }
+
+        return systems.length ? systems : [[]];
+    }
+
     computeSystems() {
         if (!this.notes.length) return [[]];
+
+        // На бумаге перенос можно делать и внутри такта
+        if (this.printLayout && this.printWrap === 'notes') {
+            return this.computeSystemsByNotes();
+        }
         
         const perSystem = this.elementsPerSystem();
         const systems = [];
@@ -1084,7 +1184,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (!this.notes.length) return null;
 
         const measure = this.measureBeats();
-        const slot = this.imageSize + 2;
+        const slot = this.slotWidth();
         let total = 0;
         this.notes.forEach(element => { total += this.elementBeats(element); });
 
@@ -1275,8 +1375,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // Создаёт DOM элемента: знак ноты или паузы, окошко длительности и подпись названия
     buildElementDom(element) {
         const anchor = document.createElement('div');
-        anchor.className = 'note-anchor fade-in';
+        anchor.className = 'note-anchor fade-in' + (element.isGrace ? ' is-grace' : '');
         anchor.id = element.id;
+        if (element.isGrace) anchor.setAttribute('data-grace', '1');
         anchor.setAttribute('data-type', element.isRest ? 'rest' : 'note');
             // Высокие ноты: окошко длительности показываем ниже ноты,
             // сверху ему не хватает места и его закрывает шапка строки
@@ -1347,10 +1448,36 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             duration: element.duration,
             dotted: element.dotted,
             stemUp: element.stemUp,
-            accidental: element.accidental
+            accidental: element.accidental,
+            grace: !!element.isGrace,
+            graceSlash: this.graceSlashFor(element)
         });
     }
     
+    // Нужна ли черта у форшлага: по файлу, всегда или никогда
+    graceSlashFor(element) {
+        if (!element || !element.isGrace) return false;
+        if (this.graceSlashMode === 'always') return true;
+        if (this.graceSlashMode === 'never') return false;
+        return !!element.graceSlash;
+    }
+
+    // Перерисовка знаков после смены режима
+    applyGraceSlashMode(mode, silent = false) {
+        this.graceSlashMode = (mode === 'always' || mode === 'never') ? mode : 'file';
+
+        const field = document.getElementById('grace-slash-mode');
+        if (field && field.value !== this.graceSlashMode) field.value = this.graceSlashMode;
+
+        this.notes.forEach(note => {
+            if (note.isGrace && note.element) this.refreshElement(note);
+        });
+        this.drawNotationCurves();
+
+        if (!silent) this.scheduleAutosave();
+        return this.graceSlashMode;
+    }
+
     // Название длительности на текущем языке
     durationLabel(value) {
         const key = 'duration.' + value;
@@ -1551,7 +1678,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     updateFileButtons() {
         const hasNotes = this.notes.length > 0;
         
-        ['btn-save', 'btn-midi-save'].forEach(id => {
+        ['btn-save', 'btn-midi-save', 'btn-print'].forEach(id => {
             const button = document.getElementById(id);
             if (button) button.disabled = !hasNotes;
         });
@@ -1966,7 +2093,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
     updateNoteCount() {
         const notes = this.notes.filter(n => !n.isRest).length;
-        const rests = this.notes.length - notes;
+        // Паузы сетки по длине записи не считаем: это не мелодия
+        const rests = this.notes.filter(n => n.isRest && !n.gridRest).length;
         document.getElementById('note-count').textContent = rests > 0
             ? t('notes.countWithRests', { n: notes, m: rests, word: I18n.plural('rests.short', rests) })
             : t('notes.count', { n: notes });
@@ -2141,11 +2269,16 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // целая на медленном темпе тянулась бы слишком долго
         const seconds = Math.min(1.2, Math.max(0.35, Playback.secondsFor(element, this.tempo)));
         
+        // Громкость и отключение основной линии действуют и здесь: при
+        // нулевой громкости нота не звучит, но выделение работает
+        const level = this.mainMuted ? 0 : (Number(this.mainVolume) || 0);
+        if (level <= 0.001) return true;
+
         // Предыдущее озвучивание гасим: при частом нажатии стрелок ноты
         // иначе накладывались бы друг на друга
         this.stopNotePreview();
         this.previewVoices = this.melodyPlayer.scheduleNote(
-            frequency, ctx.currentTime + 0.02, seconds) || [];
+            frequency, ctx.currentTime + 0.02, seconds, null, level) || [];
         
         return true;
     }
@@ -2716,7 +2849,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
         let shapes = '';
         for (let i = 0; i < count; i++) {
-            const x = 42 + i * 10;
+            const x = STAFF_CLEF_INK_RIGHT + i * STAFF_KEY_STEP;
             const y = rows[i];
             shapes += '<text class="key-sign" x="' + x + '" y="' + (y + 7) + '">' +
                 (sharp ? '\u266F' : '\u266D') + '</text>';
@@ -2810,10 +2943,38 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.scheduleAutosave();
     }
     
+    // Ключевые знаки после транспонирования. Сдвиг на полутон - это семь
+    // шагов по кругу квинт: D-dur (2 диеза) вверх на полутон даёт E-dur
+    // (4 диеза), а ре-диез-мажор (9) записывается как ми-бемоль-мажор (-3)
+    transposedKeyFifths(direction) {
+        const step = Number(direction) || 0;
+        if (!step) return this.keyFifths;
+
+        let fifths = (Number(this.keyFifths) || 0) + 7 * step;
+
+        // Держимся диапазона семи знаков
+        while (fifths > 7) fifths -= 12;
+        while (fifths < -7) fifths += 12;
+
+        // Из двух равноправных записей берём ту, что совпадает с режимом
+        // альтераций: в диезах ключ с диезами, в бемолях - с бемолями
+        if (this.displayMode === 'flats') {
+            if (fifths > 0 && fifths - 12 >= -7) fifths -= 12;
+        } else if (fifths < 0 && fifths + 12 <= 7) {
+            fifths += 12;
+        }
+
+        return fifths;
+    }
+
     transposeAllNotes(direction) {
         // «Все вверх» и «Все вниз» двигают и сопровождение: оно должно ехать
         // вместе с мелодией. Сдвиг инструмента к нему не применяется
         this.allTransposeShift += Number(direction) || 0;
+
+        // Вместе с нотами едет и тональность: иначе у нот другой ключ,
+        // а знаки при ключе остаются прежними
+        this.keyFifths = this.transposedKeyFifths(direction);
         this.applyAccompanimentShift();
         if (this.notes.length === 0) {
             this.updateStatus(t('status.noNotesToTranspose'));
@@ -2885,6 +3046,12 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Обновляем аппликатуры
         this.updateAllFingerings();
         
+        // Ключевые знаки рисуются слоем поверх стана (drawNotationCurves).
+        // Перерисовываем сразу: сама по себе раскладка не запускается, и
+        // знаки остались бы от прежней тональности
+        this.renderNotationMarks();
+        this.drawNotationCurves();
+
         this.updateStatus(t('status.transposed', { n: changedCount }));
         this.scheduleAutosave();
         return changedCount > 0;
@@ -3020,10 +3187,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 spacer.className = 'fingering-spacer';
                 spacer.setAttribute('data-note-id', note.id);
                 spacer.style.boxSizing = 'border-box';
-                spacer.style.width = (this.imageSize + 2) + 'px';
+                spacer.style.width = this.slotWidth() + 'px';
                 spacer.style.margin = '0px';
                 spacer.style.padding = '0px';
-                spacer.style.height = '200px';
+                spacer.style.height = this.cardHeight() + 'px';
                 container.appendChild(spacer);
                 return;
             }
@@ -3040,11 +3207,15 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             // достаточно, чтобы шаг карточек разошёлся с шагом нот,
             // а расхождение копится от первой ноты к последней.
             card.style.boxSizing = 'border-box';
-            card.style.width = (this.imageSize + 2) + 'px';
+            card.style.width = this.slotWidth() + 'px';
             card.style.margin = '0px';
             card.style.padding = '0px';
-            // Высота зависит от наличия вариантов: 200px для одной аппликатуры, 230px для нескольких вариантов
-            const cardHeight = note.hasFingering && note.variants > 1 ? '230px' : '200px';
+            // Высота зависит от наличия вариантов: 200px для одной аппликатуры,
+            // 230px для нескольких. На бумаге карточка мельче, а панель
+            // вариантов не печатается, поэтому высота идёт от её ширины
+            const cardHeight = this.printLayout
+                ? this.cardHeight() + 'px'
+                : (note.hasFingering && note.variants > 1 ? '230px' : '200px');
             card.style.height = cardHeight;
             card.style.display = 'flex';
             card.style.flexDirection = 'column';
@@ -3311,6 +3482,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // Раскладка мелодии по строкам: системы, координаты, черты и аппликатуры.
     // Разбивка на строки описана в computeSystems.
     updateNotePositions() {
+        // Место под ключ и знаки при ключе - до расчёта строк: от него
+        // зависит и ширина строки, и положение первой ноты
+        this.updateClefZone();
+
         // Масштаб строки считаем до раскладки: от него зависит, сколько
         // нот помещается в строку на этом экране
         this.systemScaleValue = this.systemScale();
@@ -3331,7 +3506,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         
         this.applySystemScale();
         
-        const slot = this.imageSize + 2;
+        const slot = this.slotWidth();
         
         systems.forEach((system, systemIndex) => {
 
@@ -3351,6 +3526,12 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             });
         });
         
+        // Ряд аппликатур выравниваем по той же зоне ключа: тональность могла
+        // смениться, и ряд уехал бы от нот
+        this.fingeringContainers.forEach(row => {
+            row.style.paddingLeft = STAFF_CLEF_WIDTH + 'px';
+        });
+
         this.applyStaffMetrics();
         
         // Черты и знаки репризы привязаны к координатам, поэтому перерисовываем их
@@ -3375,18 +3556,33 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             if (element.y + extent.bottom > bottom) bottom = element.y + extent.bottom;
         });
         
-        const offset = Math.max(0, Math.ceil(top) - 6); // 6px поля сверху
+        const rawOffset = Math.ceil(top) - 6; // 6px поля сверху
+        const offset = Math.max(0, rawOffset);
         const height = Math.max(140, Math.ceil(bottom - offset + 8));
-        return { offset: offset, height: height };
+        // rawOffset нужен бумаге: там ноты выше стана не обрезаются,
+        // и стан можно сдвинуть вниз (отрицательное смещение)
+        return { offset: offset, height: height, rawOffset: rawOffset };
     }
     
     applyStaffMetrics() {
         const metrics = this.systemMetrics();
-        
+
+        // На бумаге стан стоит у верха блока. Сверху оставляем столько,
+        // сколько просят сами ноты (высокие ноты и их штили), снизу -
+        // ровно три линейки: на экране запасы больше (окошко длительности
+        // и подписи), на бумаге они только растягивают страницу
+        // Верх ограничиваем: иначе одна высокая нота растягивает блок и
+        // на страницу перестаёт влезать четвёртая строка
+        const rawPrintOffset = metrics.rawOffset === undefined ? metrics.offset : metrics.rawOffset;
+        const printOffset = Math.max(rawPrintOffset, -PRINT_STAFF_MAX_TOP);
+        const offset = this.printLayout ? printOffset : metrics.offset;
+        const printHeight = Math.max(140, STAFF_MAIN_BOTTOM - printOffset + PRINT_STAFF_BOTTOM_GAP);
+        const height = this.printLayout ? printHeight : metrics.height;
+
         this.staffContainers.forEach(staff => {
             const wrapper = staff.parentElement;
-            if (wrapper) wrapper.style.height = metrics.height + 'px';
-            staff.style.transform = 'translateY(-' + metrics.offset + 'px)';
+            if (wrapper) wrapper.style.height = height + 'px';
+            staff.style.transform = 'translateY(-' + offset + 'px)';
         });
     }
     
@@ -3635,7 +3831,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.clearNotationMarks();
         
         const marks = this.computeBarLines();
-        const slot = this.imageSize + 2;
+        const slot = this.slotWidth();
         const height = STAFF_MAIN_BOTTOM - STAFF_MAIN_TOP;
         
         // Точки, занятые знаками репризы: знак сам содержит тактовую черту
@@ -3683,7 +3879,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // такта. Считаем по долям, а не по нотам: граница такта может попасть внутрь
     // длинной ноты, и тогда ноты в начале такта просто нет.
     renderMeasureNumbers(marks) {
-        const slot = this.imageSize + 2;
+        const slot = this.slotWidth();
         const measure = this.measureBeats();
         let beat = 0;
         let nextNumber = 0;
@@ -4201,7 +4397,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // Единый формат сохранения для файла и LocalStorage
     serializeMelody() {
         return {
-            elements: this.notes.map(note => ({
+            // Паузы-сетка по длине записи в файл не идут: это только вид стана
+            elements: this.notes.filter(note => !note.gridRest).map(note => ({
                 isRest: !!note.isRest,
                 positionId: note.positionId,
                 noteName: note.noteName,
@@ -4217,6 +4414,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 // всегда выражает, а играть надо по настоящему времени
                 beats: typeof note.beats === 'number' ? note.beats : null,
                 currentVariant: note.currentVariant || 1,
+                // Форшлаг времени не занимает: без пометки он станет обычной нотой
+                isGrace: !!note.isGrace,
+                // Перечёркнутый форшлаг или appoggiatura
+                graceSlash: !!note.graceSlash,
                 hasBarLine: !!note.hasBarLine,
                 repeatStart: !!note.repeatStart,
                 repeatEnd: !!note.repeatEnd
@@ -4232,11 +4433,14 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 appSoundShift: this.appSoundShift,
                 saxShift: this.saxShift,
                 soundingNames: this.soundingNames,
+                graceSlashMode: this.graceSlashMode,
                 countIn: this.countIn,
                 displayMode: this.displayMode,
                 tempo: this.tempo,
                 timeSignature: this.timeSignature,
-                barLineMode: this.barLineMode
+                barLineMode: this.barLineMode,
+                // Ключевые знаки: без них тональность теряется при перезапуске
+                keyFifths: this.keyFifths
             },
             // Сопровождение живёт отдельно от стана, но пропадать при
             // перезагрузке страницы не должно: сохраняем его и его настройки
@@ -4272,7 +4476,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     
     saveToLocalStorage(silent = false) {
         try {
-            localStorage.setItem('saxophone-fullrange-data', JSON.stringify(this.serializeMelody()));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.serializeMelody()));
             if (!silent) this.updateStatus(t('status.savedLocal'));
             return true;
         } catch (error) {
@@ -4284,6 +4488,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // Восстановление мелодии из сохранённых данных. Понимает и новый формат (elements),
     // и старый (notes) - чтобы ранее сохранённые мелодии не потерялись.
     applyMelody(data) {
+        // Новая мелодия - новое сопровождение: аудио-файл прежней пьесы
+        // к ней не подходит и только мешал бы
+        if (this.audioTrackBuffer) this.applyAudioTrack(null, '');
+
         // Загрузка из файла заменяет мелодию целиком - это как открытие
         // документа. История отката начинается заново: иначе первый же откат
         // вернул бы прежнюю мелодию, а выглядит это как пропажа всех нот.
@@ -4314,8 +4522,16 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             element.slurStart = !!item.slurStart;
             element.slurEnd = !!item.slurEnd;
             element.tuplet = item.tuplet || null;
+            // Форшлаг: времени не занимает, знак мельче
+            if (item.isGrace) {
+                element.isGrace = true;
+                element.beats = 0;
+                element.graceSlash = !!item.graceSlash;
+            }
             // Точное время: приходит из MusicXML и из автосохранения
-            if (typeof item.beats === 'number' && item.beats > 0) {
+            if (element.isGrace) {
+                element.beats = 0;
+            } else if (typeof item.beats === 'number' && item.beats > 0) {
                 element.beats = item.beats;
             } else {
                 delete element.beats;
@@ -4616,6 +4832,16 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
         if (settings && settings.soundingNames !== undefined) {
             this.soundingNames = !!settings.soundingNames;
+        }
+
+        // Черта у форшлагов
+        if (settings && settings.graceSlashMode !== undefined) {
+            this.applyGraceSlashMode(settings.graceSlashMode, true);
+        }
+
+        // Ключевые знаки из сохранения
+        if (settings && typeof settings.keyFifths === 'number') {
+            this.keyFifths = Math.max(-7, Math.min(7, Math.round(settings.keyFifths)));
         }
 
         // Файлы прежних версий хранили обратный флаг: читаем его наоборот
@@ -4920,6 +5146,303 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         });
     }
 
+    // === Аудио-аккомпанемент ===
+    // Берём музыкальный файл (mp3, wav, ogg) и играем его вместе с мелодией.
+    // Своей сетки у файла нет, поэтому темп подгоняем по его длине
+
+    hasAudioTrack() {
+        return !!this.audioTrackBuffer;
+    }
+
+    // Сколько долей в мелодии: без пауз-сетки, это настоящие ноты
+    melodyBeatsTotal() {
+        return this.notes
+            .filter(element => !element.gridRest)
+            .reduce((sum, element) => sum + Playback.beatsOf(element), 0);
+    }
+
+    // === Настройки аудиодорожки ===
+    // Сдвиг начала и конца в миллисекундах и скорость без смены высоты тона.
+    // Живут в браузере отдельно от мелодии: это настройка файла, а не пьесы
+
+    loadAudioSettings() {
+        const read = (key, fallback) => {
+            try {
+                const value = Number(localStorage.getItem(STORAGE_PREFIX + key));
+                return isFinite(value) && value !== 0 ? value : fallback;
+            } catch (error) {
+                return fallback;
+            }
+        };
+
+        this.audioStartMs = this.clampAudioShift(read('saxophone-audio-start', 0));
+        this.audioEndMs = this.clampAudioShift(read('saxophone-audio-end', 0));
+        this.audioRate = Math.max(0.5, Math.min(1.5, read('saxophone-audio-rate', 1)));
+        return this.audioSettings();
+    }
+
+    clampAudioShift(value) {
+        const number = Math.round(Number(value) || 0);
+        return Math.max(-60000, Math.min(60000, number));
+    }
+
+    audioSettings() {
+        return {
+            // Минус: запись начинается позже мелодии или доигрывает хвост
+            startMs: this.clampAudioShift(this.audioStartMs),
+            endMs: this.clampAudioShift(this.audioEndMs),
+            rate: Math.max(0.5, Math.min(1.5, Number(this.audioRate) || 1))
+        };
+    }
+
+    saveAudioSettings() {
+        const settings = this.audioSettings();
+        this.audioStartMs = settings.startMs;
+        this.audioEndMs = settings.endMs;
+        this.audioRate = settings.rate;
+
+        try {
+            localStorage.setItem(STORAGE_PREFIX + 'saxophone-audio-start', String(settings.startMs));
+            localStorage.setItem(STORAGE_PREFIX + 'saxophone-audio-end', String(settings.endMs));
+            localStorage.setItem(STORAGE_PREFIX + 'saxophone-audio-rate', String(settings.rate));
+        } catch (error) {
+            // Приватный режим: просто не запоминаем
+        }
+
+        this.renderAudioSettings();
+        return settings;
+    }
+
+    // Поля в панели: значения из состояния
+    renderAudioSettings() {
+        const settings = this.audioSettings();
+        const start = document.getElementById('audio-start');
+        const end = document.getElementById('audio-end');
+        const rate = document.getElementById('audio-rate');
+
+        if (start) start.value = String(settings.startMs);
+        if (end) end.value = String(settings.endMs);
+        if (rate) rate.value = String(Math.round(settings.rate * 1000) / 10);
+
+        // Сдвиг больше длительности файла бессмысленен
+        const duration = this.audioTrackBuffer ? this.audioTrackBuffer.duration : 0;
+        const limit = Math.max(60000, Math.round((duration || 60) * 1000));
+        if (start) start.max = String(limit);
+        if (end) end.max = String(limit);
+
+        return settings;
+    }
+
+    // Поля поменяли: читаем, зажимаем, запоминаем
+    readAudioSettingsFromFields() {
+        const start = document.getElementById('audio-start');
+        const end = document.getElementById('audio-end');
+        const rate = document.getElementById('audio-rate');
+
+        this.audioStartMs = start ? Number(start.value) || 0 : this.audioStartMs;
+        this.audioEndMs = end ? Number(end.value) || 0 : this.audioEndMs;
+        this.audioRate = rate ? (Number(rate.value) || 100) / 100 : this.audioRate;
+
+        this.saveAudioSettings();
+
+        // Уже играем - сообщаем плееру и перезапускаем с нового места
+        if (this.melodyPlayer) {
+            this.melodyPlayer.setAudioSettings(this.audioSettings());
+        }
+        return this.audioSettings();
+    }
+
+    // Сколько тактов занимает запись при текущем темпе: по этому числу
+    // строится стан (см. applyAudioGrid). Темп задаёт пользователь,
+    // а длина стана следует из длины записи
+    audioMeasures() {
+        if (!this.hasAudioTrack() || !this.audioTrackBuffer.duration) return 0;
+        const measure = this.measureBeats() || 4;
+        const beats = this.audioTrackBuffer.duration * this.tempo / 60;
+        return Math.max(1, Math.round(beats / measure));
+    }
+
+    // Поставить дорожку: сюда приходит уже расшифрованный звук
+    applyAudioTrack(buffer, name, url) {
+        this.audioTrackBuffer = buffer || null;
+        this.audioTrackName = name || '';
+        if (url !== undefined) this.audioTrackUrl = url;
+        if (!buffer) this.audioTrackUrl = null;
+
+        if (this.melodyPlayer) {
+            this.melodyPlayer.setAudioTrack(this.audioTrackBuffer, this.audioTrackName, {
+                url: this.audioTrackUrl,
+                duration: this.audioTrackBuffer ? this.audioTrackBuffer.duration : 0
+            });
+            this.melodyPlayer.setAudioSettings(this.audioSettings());
+        }
+
+        this.renderAudioAccompaniment();
+        this.renderAccompanimentPanel();
+
+        if (!buffer) {
+            this.updateStatus(t('status.audioCleared'));
+            return false;
+        }
+
+        // Темп остаётся тем, что выставлен: он задаёт, сколько тактов
+        // записи соответствует. Стан подстраиваем под длину файла
+        this.buildingGrid = true;
+        this.applyAudioGrid();
+        this.buildingGrid = false;
+
+        this.updateStatus(t('status.audioLoaded', {
+            name: this.audioTrackName,
+            measures: this.audioMeasures(),
+            tempo: this.tempo
+        }));
+        return true;
+    }
+
+    clearAudioTrack() {
+        // Запись снята - её сетка тоже больше не нужна
+        this.removeGridRests();
+        this.relayout();
+        if (!this.hasAudioTrack()) return false;
+        this.applyAudioTrack(null, '');
+        return true;
+    }
+
+
+    // Строка с названием файла, длительностью и темпом
+    renderAudioAccompaniment() {
+        const row = document.getElementById('audio-row');
+        const nameNode = document.getElementById('audio-name');
+        const clearButton = document.getElementById('btn-audio-clear');
+        if (!row) return;
+
+        const hasTrack = this.hasAudioTrack();
+        row.hidden = !hasTrack;
+
+        const tuning = document.getElementById('audio-tuning');
+        if (tuning) tuning.hidden = !hasTrack;
+        if (hasTrack) this.renderAudioSettings();
+
+        if (clearButton) clearButton.disabled = !hasTrack;
+        if (!hasTrack) {
+            if (nameNode) nameNode.textContent = '';
+            return;
+        }
+
+        if (nameNode) {
+            nameNode.textContent = t('audio.info', {
+                name: this.audioTrackName,
+                seconds: Math.round(this.audioTrackBuffer.duration),
+                measures: this.audioMeasures()
+            });
+        }
+    }
+
+    // Стан по длине записи: сколько при текущем темпе в неё влезает тактов,
+    // столько и рисуем. Хвост заполняем паузами-сеткой: их можно снять
+    // или пересчитать, а настоящие ноты не трогаются
+    // Снять паузы-сетку: убираем и элементы, и их разметку. Просто вырезать
+    // их из notes нельзя - узлы остались бы висеть на стане
+    removeGridRests() {
+        const grid = this.notes.filter(note => note.gridRest);
+        grid.forEach(note => {
+            if (note.element && note.element.remove) note.element.remove();
+        });
+        this.notes = this.notes.filter(note => !note.gridRest);
+        return grid.length;
+    }
+
+    applyAudioGrid(silent = true) {
+        // Прежнюю сетку убираем: она зависела от прежнего темпа и размера
+        this.removeGridRests();
+
+        if (!this.hasAudioTrack() || !this.audioTrackBuffer.duration) {
+            if (!this.notes.length) this.relayout();
+            return false;
+        }
+
+        const measure = this.measureBeats() || 4;
+        const seconds = this.audioTrackBuffer.duration;
+        const beats = seconds * this.tempo / 60;
+        // Целое число тактов: сетка не должна обрываться на середине
+        const measures = Math.max(1, Math.round(beats / measure));
+        const target = measures * measure;
+
+        let used = 0;
+        this.notes.forEach(note => { used += this.elementBeats(note); });
+
+        // Мелодия уже длиннее записи: не режем, просто не добавляем пауз
+        if (used < target - 0.01) {
+            let left = target - used;
+
+            // Добиваем целыми паузами, остаток - тем, что короче
+            while (left > 0.01) {
+                const options = [4, 2, 1].filter(value => value <= left + 1e-6);
+                const duration = options.length ? options[0] : (left >= 0.5 ? 1 : 2);
+                const beatsLeft = Math.min(duration, left);
+
+                const rest = this.addRest(null, { silent: true });
+                const element = this.notes[this.notes.length - 1];
+                if (!element) break;
+
+                // addRest берёт длительность у предыдущего элемента -
+                // ставим нужную и помечаем паузу как часть сетки
+                this.setElementDuration(element, duration <= 1 ? 4 : duration, {
+                    silent: true, history: false
+                });
+                element.gridRest = true;
+                element.beats = beatsLeft;
+                left -= beatsLeft;
+            }
+        }
+
+        if (!silent) this.scheduleAutosave();
+        this.relayout();
+        return true;
+    }
+
+    // Чтение файла: расшифровка звука асинхронная
+    loadAudioTrackFile(file) {
+        if (!file) return Promise.resolve(false);
+
+        const player = this.melodyPlayer;
+        const ctx = player.ensureContext();
+        if (!ctx || typeof ctx.decodeAudioData !== 'function') {
+            this.updateStatus(t('status.noAudio'));
+            return Promise.resolve(false);
+        }
+
+        return file.arrayBuffer().then(bytes => {
+            // Ссылку на файл делаем ДО расшифровки и из копии байтов:
+            // decodeAudioData забирает буфер себе, и Blob из него вышел бы
+            // пустым. Ссылка нужна для <audio>: только он умеет менять
+            // скорость с сохранением высоты тона
+            let url = null;
+            try {
+                const copy = bytes.slice(0);
+                url = URL.createObjectURL(new Blob([copy], { type: file.type || 'audio/mpeg' }));
+            } catch (error) {
+                url = null;
+            }
+
+            return new Promise((resolve, reject) => {
+                const promise = ctx.decodeAudioData(bytes, resolve, reject);
+                if (promise && typeof promise.then === 'function') promise.then(resolve, reject);
+            }).then(audioBuffer => {
+                if (this.audioTrackUrl) {
+                    try { URL.revokeObjectURL(this.audioTrackUrl); } catch (error) { /* уже отозван */ }
+                }
+                this.audioTrackUrl = url;
+
+                this.applyAudioTrack(audioBuffer, file.name, url);
+                return true;
+            });
+        }).catch(error => {
+            this.updateStatus(t('status.audioFailed', { message: error && error.message || error }));
+            return false;
+        });
+    }
+
     syncPresetHighlight() {
         // Общая громкость сопровождения и построение панели дорожек.
         // Единичный обработчик: при повторной инициализации addEventListener
@@ -5035,6 +5558,25 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const input = document.getElementById('tempo-input');
         if (input && parseInt(input.value, 10) !== tempo) input.value = tempo;
 
+        // При загруженной записи стан подгоняется под её длину: в другой темп
+        // влезает другое число тактов, и сетка пересчитывается
+        if (changed && this.hasAudioTrack() && !this.buildingGrid) {
+            this.buildingGrid = true;
+            const wasPlaying = this.melodyPlayer && this.melodyPlayer.playing;
+            const current = wasPlaying && this.melodyPlayer.timeline
+                ? this.melodyPlayer.timeline[this.melodyPlayer.timelineIndex || 0]
+                : null;
+
+            this.applyAudioGrid();
+
+            // Игру перезапускаем с текущего места: список нот изменился
+            if (wasPlaying && typeof this.playFromElement === 'function') {
+                this.playFromElement(current && current.element ? current.element : this.notes[0]);
+            }
+            this.buildingGrid = false;
+            return tempo;
+        }
+
         // Темп меняется сразу и во время игры: остаток мелодии ставится
         // заново с новым темпом, сопровождение продолжает с текущего места
         if (changed && this.melodyPlayer && this.melodyPlayer.playing) {
@@ -5046,7 +5588,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     
     loadFromLocalStorage() {
         try {
-            const dataStr = localStorage.getItem('saxophone-fullrange-data');
+            const dataStr = localStorage.getItem(STORAGE_KEY);
             if (!dataStr) {
                 this.updateStatus(t('status.noSavedMelody'));
                 return false;
@@ -5126,6 +5668,326 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }
     }
     
+    // === Печать и PDF ===
+    // Печатает браузер: в окне печати можно выбрать принтер или «Сохранить
+    // как PDF». Заголовок правится в окне перед печатью, аппликатуры
+    // печатаются, если они показаны на экране
+
+    // Заголовок по умолчанию: имя открытого файла или просто «Ноты»
+    printTitleDefault() {
+        // Прошлый заголовок помним: чаще всего печатают одну и ту же вещь
+        const saved = this.savedPrintTitle();
+        if (saved) return saved;
+
+        const name = this.currentFileName || '';
+        const base = name.replace(/\.[^.]+$/, '');
+        return base || t('print.defaultTitle');
+    }
+
+    // Запомненный заголовок печати: живёт в браузере между запусками
+    savedPrintTitle() {
+        try {
+            return localStorage.getItem(STORAGE_PREFIX + 'saxophone-print-title') || '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    rememberPrintTitle(title) {
+        const value = String(title || '').trim();
+        try {
+            if (value) localStorage.setItem(STORAGE_PREFIX + 'saxophone-print-title', value);
+        } catch (error) {
+            // Приватный режим: просто не запоминаем
+        }
+    }
+
+    // Подпись под заголовком: размер, темп и сдвиг инструмента
+    printMetaText() {
+        const shift = Number(this.saxShift) || 0;
+        const shiftText = shift > 0 ? '+' + shift : String(shift);
+
+        return t('print.meta', {
+            signature: this.timeSignature,
+            tempo: this.tempo,
+            shift: shiftText
+        });
+    }
+
+    // Запомненный способ переноса строк
+    savedPrintWrap() {
+        try {
+            const value = localStorage.getItem(STORAGE_PREFIX + 'saxophone-print-wrap');
+            return value === 'notes' ? 'notes' : 'measures';
+        } catch (error) {
+            return 'measures';
+        }
+    }
+
+    // Запомненный масштаб печати (в процентах)
+    savedPrintScale() {
+        try {
+            const raw = Number(localStorage.getItem(STORAGE_PREFIX + 'saxophone-print-scale'));
+            return this.clampPrintScale(raw || 100) / 100;
+        } catch (error) {
+            return 1;
+        }
+    }
+
+    clampPrintScale(percent) {
+        const value = Number(percent) || 100;
+        return Math.min(150, Math.max(50, Math.round(value)));
+    }
+
+    rememberPrintScale(percent) {
+        const value = this.clampPrintScale(percent);
+        this.printScale = value / 100;
+        try {
+            localStorage.setItem(STORAGE_PREFIX + 'saxophone-print-scale', String(value));
+        } catch (error) {
+            // Приватный режим: просто не запоминаем
+        }
+        return value;
+    }
+
+    rememberPrintWrap(value) {
+        const wrap = value === 'notes' ? 'notes' : 'measures';
+        this.printWrap = wrap;
+        try {
+            localStorage.setItem(STORAGE_PREFIX + 'saxophone-print-wrap', wrap);
+        } catch (error) {
+            // Приватный режим: просто не запоминаем
+        }
+        return wrap;
+    }
+
+    openPrintDialog() {
+        if (!this.notes.length) {
+            this.updateStatus(t('status.addNotesFirst'));
+            return false;
+        }
+
+        const modal = document.getElementById('print-modal');
+        const input = document.getElementById('print-title-input');
+        const fingerings = document.getElementById('print-fingerings');
+        const names = document.getElementById('print-names');
+        if (!modal) return false;
+
+        if (input) input.value = this.printTitleDefault();
+
+        // Размер и темп видны сразу: они печатаются рядом с заголовком
+        const meta = document.getElementById('print-dialog-meta');
+        if (meta) meta.textContent = this.printMetaText();
+
+        const wrapSelect = document.getElementById('print-wrap');
+        if (wrapSelect) wrapSelect.value = this.printWrap;
+
+        const scaleField = document.getElementById('print-scale');
+        if (scaleField) scaleField.value = String(Math.round(this.printScale * 100));
+
+        // Галочки повторяют то, что сейчас на экране
+        if (fingerings) fingerings.checked = !!this.showFingerings;
+        if (names) names.checked = !!this.showNoteNames;
+
+        modal.hidden = false;
+        if (input) {
+            input.focus();
+            input.select();
+        }
+        return true;
+    }
+
+    closePrintDialog() {
+        const modal = document.getElementById('print-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    // Перед печатью стан перекладывается под ширину листа: иначе строки
+    // посчитаны под экран, и браузер сжимает их целиком - знаки мельчают
+    beforePrint() {
+        if (this.printLayout) return;
+        this.printLayout = true;
+
+        // Ширину листа задаём прямо в пикселях: раскладка меряет
+        // контейнер, а он на экране ещё экранной ширины
+        this.applyPageWidth();
+
+        this.printScrollLeft = this.scrollLeftNow || 0;
+        document.body.classList.add('print-layout');
+
+        // Пересчитываем строки под ширину бумаги и в масштабе 1: так
+        // на строке помещается несколько тактов, а знаки крупные
+        this.relayout();
+        this.prepareClefsForPrint();
+    }
+
+    afterPrint() {
+        if (!this.printLayout) return;
+        this.printLayout = false;
+        document.body.classList.remove('print-layout');
+        this.restorePageWidth();
+        this.restoreClefsAfterPrint();
+        this.relayout();
+    }
+
+    // Ширина рабочей области под А4: 210 мм минус поля по 10 мм, при 96 dpi
+    printPageWidth() {
+        return Math.round((210 - 20) / 25.4 * 96);
+    }
+
+    applyPageWidth() {
+        const width = this.printPageWidth() + 'px';
+        const main = document.querySelector('.main-content');
+        const area = document.querySelector('.staff-area');
+
+        if (main) {
+            this.pageMainWidth = main.style.width;
+            this.pageMainPadding = main.style.padding;
+            main.style.width = width;
+            main.style.padding = '0';
+        }
+        if (area) {
+            this.pageAreaWidth = area.style.width;
+            this.pageAreaFlex = area.style.flex;
+            area.style.width = width;
+            area.style.flex = 'none';
+        }
+    }
+
+    restorePageWidth() {
+        const main = document.querySelector('.main-content');
+        const area = document.querySelector('.staff-area');
+
+        if (main) {
+            main.style.width = this.pageMainWidth || '';
+            main.style.padding = this.pageMainPadding || '';
+        }
+        if (area) {
+            area.style.width = this.pageAreaWidth || '';
+            area.style.flex = this.pageAreaFlex || '';
+        }
+    }
+
+    // Скрипичный ключ знаком U+1D11E. На экране он рисуется шрифтом, но
+    // в PDF браузер этот знак иногда теряет (глиф из дополнительной
+    // плоскости Unicode не попадает в файл) и ключ пропадает. Поэтому
+    // перед печатью рисуем его в canvas и подставляем картинкой
+    prepareClefsForPrint() {
+        const clefs = Array.from(document.querySelectorAll('.staff-clef'));
+        clefs.forEach(clef => {
+            if (clef.dataset.printImage) return;
+
+            try {
+                const style = window.getComputedStyle(clef);
+                const fontSize = parseFloat(style.fontSize) || 116;
+                const glyph = clef.textContent;
+                const probe = document.createElement('canvas').getContext('2d');
+                probe.font = style.font;
+                const metrics = probe.measureText(glyph);
+
+                // Метрики чернил: по ним картинка встанет ровно туда, где
+                // стоял глиф. При line-height: 1 базовая линия лежит на
+                // 0.915em от верха строки
+                const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8;
+                const descent = metrics.actualBoundingBoxDescent || fontSize * 0.23;
+                const left = metrics.actualBoundingBoxLeft || 0;
+                const right = metrics.actualBoundingBoxRight || metrics.width;
+
+                const inkWidth = Math.max(1, Math.ceil(left + right) + 2);
+                const inkHeight = Math.max(1, Math.ceil(ascent + descent) + 2);
+                const dpr = 3;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = inkWidth * dpr;
+                canvas.height = inkHeight * dpr;
+
+                const context = canvas.getContext('2d');
+                context.scale(dpr, dpr);
+                context.font = style.font;
+                context.fillStyle = '#000000';
+                context.textBaseline = 'alphabetic';
+                context.fillText(glyph, left + 1, ascent + 1);
+
+                // Сдвигаем верх картинки туда, где начинались чернила
+                const top = parseFloat(style.top) || 0;
+                const inkTop = top + fontSize * 0.915 - ascent;
+
+                clef.dataset.printImage = canvas.toDataURL('image/png');
+                clef.dataset.printText = glyph;
+                clef.dataset.printWidth = String(inkWidth);
+                clef.dataset.printHeight = String(inkHeight);
+                clef.dataset.printTop = style.top;
+                clef.textContent = '';
+                clef.style.width = inkWidth + 'px';
+                clef.style.height = inkHeight + 'px';
+                clef.style.top = inkTop + 'px';
+                clef.style.backgroundImage = 'url(' + clef.dataset.printImage + ')';
+                clef.style.backgroundSize = '100% 100%';
+                clef.style.backgroundRepeat = 'no-repeat';
+            } catch (error) {
+                // Не вышло - печатаем как есть, шрифтом
+            }
+        });
+    }
+
+    restoreClefsAfterPrint() {
+        document.querySelectorAll('.staff-clef').forEach(clef => {
+            if (!clef.dataset.printImage) return;
+            clef.textContent = clef.dataset.printText || '\uD834\uDD1E';
+            clef.style.backgroundImage = '';
+            clef.style.width = '';
+            clef.style.height = '';
+            clef.style.lineHeight = '';
+            clef.style.top = clef.dataset.printTop || '';
+            delete clef.dataset.printImage;
+            delete clef.dataset.printText;
+            delete clef.dataset.printWidth;
+            delete clef.dataset.printHeight;
+        });
+    }
+
+    // Готовим стан к бумаге и зовём окно печати
+    printNow() {
+        const input = document.getElementById('print-title-input');
+        const fingerings = document.getElementById('print-fingerings');
+        const title = (input && input.value.trim()) || this.printTitleDefault();
+
+        const titleNode = document.getElementById('print-title');
+        if (titleNode) titleNode.textContent = title;
+
+        // Рядом с названием - размер и темп
+        const metaNode = document.getElementById('print-meta');
+        if (metaNode) metaNode.textContent = this.printMetaText();
+
+        // Заголовок и способ переноса запоминаем: в следующий раз подставятся сами
+        this.rememberPrintTitle(title);
+
+        const wrapSelect = document.getElementById('print-wrap');
+        this.rememberPrintWrap(wrapSelect ? wrapSelect.value : this.printWrap);
+
+        const scaleField = document.getElementById('print-scale');
+        this.rememberPrintScale(scaleField ? scaleField.value : this.printScale * 100);
+
+        // Аппликатуры и названия нот на бумаге: по галочкам, а не по тому,
+        // что видно сейчас
+        const withFingerings = fingerings ? fingerings.checked : !!this.showFingerings;
+        document.body.classList.toggle('print-with-fingerings', withFingerings);
+
+        const names = document.getElementById('print-names');
+        const withNames = names ? names.checked : !!this.showNoteNames;
+        document.body.classList.toggle('print-with-names', withNames);
+
+        this.closePrintDialog();
+
+        // Кладём на бумагу только стан: остальное скрыто стилями печати.
+        // Стан перекладываем под лист здесь же: событие beforeprint есть
+        // не всегда, а без него строки остаются экранными
+        this.updateStatus(t('status.printing'));
+        this.beforePrint();
+        window.print();
+        return true;
+    }
+
     // Сохранение в MusicXML: формат обмена, его читают MuseScore, Sibelius,
     // Audiveris. Наше состояние уходит в расширения sax-fingering-*
     saveMusicXmlFile() {
@@ -5149,7 +6011,13 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 version: version,
                 fingeringSet: (typeof FINGERING_SET_ID !== 'undefined') ? FINGERING_SET_ID : ''
             },
-            elements: this.notes
+            // Паузы-сетка по длине записи в файл не идут
+            elements: this.notes.filter(note => !note.gridRest),
+            // Сопровождение - отдельными партиями, в той высоте, в какой звучит
+            parts: this.accompanimentTracksForExport().map(track => ({
+                name: track.name,
+                notes: track.notes
+            }))
         });
 
         const blob = new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' });
@@ -5162,7 +6030,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-        this.updateStatus(t('status.savedMusicXml'));
+        this.updateStatus(t('status.savedMusicXml', {
+            parts: 1 + this.accompanimentTracksForExport().length
+        }));
         this.scheduleAutosave();
         return true;
     }
@@ -5243,7 +6113,22 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 return false;
             }
             
+            // Мелодия и сопровождение идут отдельными дорожками: иначе
+            // сохранённый файл терял всё, что было под мелодией
+            const accompaniment = this.accompanimentTracksForExport();
+            const tracks = [{
+                name: 'Saxophone',
+                notes: notes,
+                channel: 0
+            }].concat(accompaniment.map(track => ({
+                name: track.name,
+                notes: track.notes,
+                drum: track.drum,
+                volume: track.volume
+            })));
+
             const bytes = Midi.build({
+                tracks: tracks.length > 1 ? tracks : null,
                 notes: notes,
                 tempo: this.tempo,
                 timeSignature: this.timeSignature
@@ -5260,7 +6145,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            this.updateStatus(t('status.midiSaved', { count: notes.length }));
+            this.updateStatus(t('status.midiSaved', {
+                count: notes.length,
+                tracks: 1 + accompaniment.length
+            }));
             return true;
         } catch (error) {
             this.updateStatus(t('status.saveError', { message: error.message }));
@@ -5268,6 +6156,44 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }
     }
     
+    // Дорожки сопровождения для сохранения: сгруппированы по дорожкам
+    // исходного файла и сдвинуты так, как звучат сейчас (сдвиг сопровождения
+    // плюс «все вверх/вниз»). Темп и сдвиги уходят в файл вместе с ними
+    accompanimentTracksForExport() {
+        const shift = (Number(this.accompanimentShift) || 0) + (Number(this.allTransposeShift) || 0);
+        const groups = new Map();
+
+        (this.accompaniment || []).forEach(note => {
+            const key = String(note.trackIndex === undefined || note.trackIndex === null
+                ? (note.trackName || '0') : note.trackIndex);
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    key: key,
+                    name: note.trackName || t('midi.track', { n: groups.size + 1 }),
+                    drum: !!note.drum,
+                    notes: []
+                });
+            }
+
+            const group = groups.get(key);
+            const settings = this.accompanimentSettings ? this.accompanimentSettings[key] : null;
+            if (settings && settings.muted) {
+                // Выключенная дорожка остаётся в файле тихой: громкость 0
+                group.volume = 0;
+            } else if (settings && typeof settings.volume === 'number') {
+                group.volume = settings.volume;
+            }
+
+            group.notes.push({
+                midi: Math.max(0, Math.min(127, Math.round(note.midi + shift))),
+                startBeat: note.startBeat || 0,
+                beats: note.beats || 1
+            });
+        });
+
+        return Array.from(groups.values());
+    }
+
     // Имя открытого файла в подвале: видно, с чем работаешь
     setCurrentFile(name, size) {
         this.currentFileName = name || '';
@@ -5563,7 +6489,21 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             // Точное время из файла: записываемая длительность не всегда может
             // его выразить, а играть надо по настоящему времени, иначе мелодия
             // расходится с сопровождением
-            if (item.beats) element.beats = item.beats;
+            // Форшлаг: времени не занимает, знак мельче, играется коротко
+            if (item.isGrace) {
+                element.isGrace = true;
+                element.beats = 0;
+                // Черта только у перечёркнутого форшлага (slash="yes")
+                element.graceSlash = !!item.graceSlash;
+                // Знак перерисовываем сразу: он мельче обычного и с чертой
+                if (element.element) {
+                    element.element.classList.add('is-grace');
+                    element.element.setAttribute('data-grace', '1');
+                }
+                this.refreshElement(element);
+            } else if (item.beats) {
+                element.beats = item.beats;
+            }
             if (item.tiedToNext) element.tiedToNext = true;
             if (item.slurStart) element.slurStart = true;
             if (item.slurEnd) element.slurEnd = true;
@@ -5806,6 +6746,15 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.updateNoteNamesVisibility(e.target.checked);
         staffManager.scheduleAutosave();
     });
+
+    // Черта у форшлагов: как в файле, всегда или никогда
+    const graceSlashField = document.getElementById('grace-slash-mode');
+    if (graceSlashField) {
+        graceSlashField.value = staffManager.graceSlashMode;
+        graceSlashField.addEventListener('change', (e) => {
+            staffManager.applyGraceSlashMode(e.target.value);
+        });
+    }
     
     // Режим отображения альтераций: переписываем уже добавленные ноты
     document.querySelectorAll('input[name="accidentals-mode"]').forEach(radio => {
@@ -5829,6 +6778,84 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('btn-play').addEventListener('click', playMelody);
     document.getElementById('btn-stop').addEventListener('click', stopMelody);
+
+    // Аудио-аккомпанемент: выбираем музыкальный файл и играем его с мелодией
+    const audioButton = document.getElementById('btn-audio-accompaniment');
+    const audioInput = document.getElementById('audio-input');
+    if (audioButton && audioInput) {
+        audioButton.addEventListener('click', () => audioInput.click());
+        audioInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            staffManager.loadAudioTrackFile(file);
+            e.target.value = '';
+        });
+    }
+
+    // Сдвиги начала и конца и скорость: меняем на лету
+    ['audio-start', 'audio-end', 'audio-rate'].forEach((id) => {
+        const field = document.getElementById(id);
+        if (!field) return;
+        field.addEventListener('change', () => staffManager.readAudioSettingsFromFields());
+    });
+
+    const audioClearButton = document.getElementById('btn-audio-clear');
+    if (audioClearButton) {
+        audioClearButton.addEventListener('click', () => staffManager.clearAudioTrack());
+    }
+
+
+    // Печать: кнопка в панели, окно с заголовком и кнопки окна
+    const printButton = document.getElementById('btn-print');
+    if (printButton) {
+        printButton.addEventListener('click', () => staffManager.openPrintDialog());
+    }
+
+    const printGoButton = document.getElementById('btn-print-go');
+    if (printGoButton) {
+        printGoButton.addEventListener('click', () => staffManager.printNow());
+    }
+
+    // Масштаб печати: поле принимает любой процент, кнопки двигают по пять
+    const scaleMinusButton = document.getElementById('btn-print-scale-minus');
+    const scalePlusButton = document.getElementById('btn-print-scale-plus');
+    const scaleFieldInput = document.getElementById('print-scale');
+
+    function stepPrintScale(delta) {
+        if (!scaleFieldInput) return;
+        const current = staffManager.clampPrintScale(Number(scaleFieldInput.value) || 100);
+        scaleFieldInput.value = String(staffManager.clampPrintScale(current + delta));
+    }
+
+    if (scaleMinusButton) {
+        scaleMinusButton.addEventListener('click', () => stepPrintScale(-5));
+    }
+    if (scalePlusButton) {
+        scalePlusButton.addEventListener('click', () => stepPrintScale(5));
+    }
+
+    // Введённое руками сразу приводим к допустимым границам
+    if (scaleFieldInput) {
+        scaleFieldInput.addEventListener('change', () => {
+            scaleFieldInput.value = String(staffManager.clampPrintScale(scaleFieldInput.value));
+        });
+    }
+
+    const printCancelButton = document.getElementById('btn-print-cancel');
+    if (printCancelButton) {
+        printCancelButton.addEventListener('click', () => staffManager.closePrintDialog());
+    }
+
+    // Браузер сообщает, когда начинается и заканчивается печать:
+    // перекладываем стан под ширину листа и возвращаем обратно
+    window.addEventListener('beforeprint', () => staffManager.beforePrint());
+    window.addEventListener('afterprint', () => staffManager.afterPrint());
+
+    const printModal = document.getElementById('print-modal');
+    if (printModal) {
+        printModal.addEventListener('click', (e) => {
+            if (e.target === printModal) staffManager.closePrintDialog();
+        });
+    }
 
     // Фрагмент для разучивания: отмечаем выделенную ноту началом или концом
     const fragmentStartButton = document.getElementById('btn-fragment-start');
@@ -5950,7 +6977,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     beatsPerBar: staffManager.measureBeats()
                 }
                 : { metronome: staffManager.metronome, beatsPerBar: staffManager.measureBeats() };
-            playOptions.accompaniment = staffManager.accompaniment || [];
+            // Аудио-файл заменяет партии: два сопровождения сразу не нужны
+            const hasAudio = !!staffManager.audioTrackBuffer;
+            playOptions.accompaniment = hasAudio ? [] : (staffManager.accompaniment || []);
+            playOptions.audioTrack = staffManager.audioTrackBuffer;
+            playOptions.audioTrackName = staffManager.audioTrackName;
+            playOptions.audioTrackUrl = staffManager.audioTrackUrl;
+            playOptions.audioTrackDuration = staffManager.audioTrackBuffer
+                ? staffManager.audioTrackBuffer.duration : 0;
+            playOptions.audioSettings = staffManager.audioSettings();
             playOptions.accompanimentFromBeat = accompanimentFromBeat;
             playOptions.accompanimentTracks = staffManager.accompanimentSettings;
             playOptions.accompanimentVolume = staffManager.accompanimentVolume;

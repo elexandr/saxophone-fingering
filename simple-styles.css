@@ -172,6 +172,55 @@ body {
     cursor: not-allowed;
 }
 
+/* Аудио-аккомпанемент: кнопка выбора файла и строка с названием */
+.audio-block {
+    margin-top: 6px;
+}
+
+.audio-row {
+    margin-top: 6px;
+    padding: 4px 8px 6px;
+    border-radius: 5px;
+    background: #f2f6ff;
+    color: #3a4b8a;
+    font-size: 11px;
+}
+
+.audio-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+}
+
+/* Сдвиги и скорость аудиодорожки: три узких поля в ряд */
+.audio-tuning {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.audio-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 10px;
+    color: #4a5568;
+}
+
+.audio-field .number-input {
+    width: 100%;
+    min-width: 0;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+
+.audio-actions {
+    display: flex;
+    gap: 6px;
+}
+
 /* Фрагмент для разучивания: кнопки отметок и метки на стане */
 .fragment-group {
     margin-top: 8px;
@@ -623,9 +672,13 @@ body {
 .staff-clef {
     position: absolute;
     left: 2px;
-    top: 127px;
+    /* Завиток ключа должен лежать на линейке G (вторая снизу, y=150):
+       top = (150 + 0.113em) - 0.915em при кегле 96px, то есть 73px.
+       Кегль меньше прежнего на пятую часть: крупный ключ наезжал на
+       знаки при ключе и спорил с ними по весу */
+    top: 73px;
     font-family: 'Segoe UI Symbol', 'Apple Symbols', 'Noto Music', serif;
-    font-size: 116px;
+    font-size: 96px;
     line-height: 1;
     color: #111111;
     pointer-events: none;
@@ -1848,3 +1901,280 @@ body.many-selected .note-anchor .duration-panel {
 .accompaniment-name { flex: 0 0 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .accompaniment-track input[type="range"] { flex: 1; min-width: 36px; }
 
+
+/* === Печать и PDF ===
+   На бумаге остаётся только стан: панель, шапка, подвал и окна скрыты.
+   Заголовок печати на экране не виден и появляется только при печати. */
+.print-header {
+    display: none;
+}
+
+.print-field {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+
+.print-field span {
+    display: block;
+    margin-bottom: 4px;
+    color: #495057;
+}
+
+.print-field input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.print-fingerings-label {
+    margin-bottom: 14px;
+}
+
+.print-dialog-meta {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #6b7785;
+}
+
+/* Поле масштаба печати: узкое, чтобы не растягивало окно */
+.print-scale-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.print-scale-row .number-input {
+    width: 64px;
+    text-align: center;
+}
+
+/* Выпадающие списки в панели настроек */
+.select-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    font-size: 12px;
+    border: 1px solid #cbd5e0;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #2d3748;
+}
+
+.print-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    font-size: 13px;
+    border: 1px solid #cbd5e0;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #2d3748;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* Раскладка под бумагу: ширина листа А4 минус поля. Класс ставится
+   перед печатью, чтобы строки считались уже под эту ширину */
+body.print-layout .main-content {
+    display: block !important;
+    padding: 0 !important;
+}
+
+body.print-layout .staff-area {
+    width: 718px !important;
+    max-width: 718px !important;
+    flex: none !important;
+}
+
+@page {
+    size: A4 portrait;
+    margin: 10mm;
+}
+
+@media print {
+    /* Всё, что не относится к нотам, на бумаге не нужно */
+    .app-header,
+    .staff-header,
+    .control-panel,
+    .app-footer,
+    .modal,
+    .consent,
+    .count-in {
+        display: none !important;
+    }
+
+    /* Страница: белый фон, без полей и прокрутки */
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+    }
+
+    /* Корень приложения - .app-container: у него высота экрана и
+       overflow: hidden. Без снятия этих двух свойств браузер печатает
+       только первый экран, а остальное обрезает */
+    .app-container,
+    .main-content,
+    .staff-area,
+    .staff-container {
+        display: block !important;
+        height: auto !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+    }
+
+    /* Заголовок над станом */
+    .print-header {
+        display: block !important;
+        padding: 2mm 0 1mm;
+    }
+
+    #print-title {
+        margin: 0;
+        font-size: 15pt;
+        font-weight: 700;
+        text-align: center;
+        color: #000000;
+    }
+
+    /* Размер и темп под названием */
+    .print-meta {
+        margin-top: 0.8mm;
+        text-align: center;
+        font-size: 9pt;
+        color: #3c3c3c;
+    }
+
+    /* Прокрутку снимаем, но раскладку стана НЕ трогаем: строки уже
+       разложены по пикселям, и переопределение высот ломает знаки */
+    .scrollable-area,
+    .systems {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+        flex: none !important;
+    }
+
+    /* Строки печатаются блоками: гибкая раскладка (flex) в PDF не
+       режется на страницы, и всё после первой страницы пропадало */
+    .systems {
+        display: block !important;
+    }
+
+    /* Строка целиком на одной странице */
+    .system {
+        display: block !important;
+        margin-bottom: 5mm;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* Аппликатуры печатаются, только если отмечено в окне печати */
+    body:not(.print-with-fingerings) .fingerings-row {
+        display: none !important;
+    }
+
+    .fingering-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* Ряд аппликатур на бумаге: карточки мельче экранных и вплотную
+       к стану - на экране между ними оставлено место под подписи */
+    .fingerings-row {
+        min-height: 0 !important;
+        margin-top: 0 !important;
+        border-top: 0 !important;
+    }
+
+    .staff-wrapper {
+        overflow: hidden !important;
+    }
+
+    /* Блоки друг к другу ближе, без лишних полей */
+    .system {
+        border-radius: 0 !important;
+        margin-bottom: 2mm !important;
+    }
+
+    .staff-container {
+        border: 0 !important;
+        border-radius: 0 !important;
+    }
+
+    /* Названия нот печатаются, только если отмечено в окне печати */
+    body:not(.print-with-names) .note-label {
+        display: none !important;
+    }
+
+    /* Линейки, черты и ключ печатаются чёрными в полную силу: на экране
+       они тонкие, на бумаге тонкое превращается в бледную паутинку */
+    html,
+    body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Пять основных линеек - чёрные и плотные. Верхние и нижние
+       направляющие (они создаются с opacity 0.5) на бумаге не нужны:
+       на экране это подсказка, на бумаге - сетка, которой в нотах нет */
+    /* 3px при масштабе печати 0.67 дают на бумаге нормальные 2px */
+    .staff-line {
+        background: #000000 !important;
+        opacity: 1 !important;
+        height: 3px !important;
+    }
+
+    .staff-line[style*="opacity: 0.5"] {
+        display: none !important;
+    }
+
+    .bar-line {
+        background: #000000 !important;
+    }
+
+    .system {
+        border-color: #8a94a6 !important;
+    }
+
+    /* Ключ при печати подставляется картинкой (см. prepareClefsForPrint) */
+    .staff-clef {
+        color: #000000 !important;
+        background-repeat: no-repeat;
+        background-size: 100% 100%;
+    }
+
+    /* Подсветки и окошки правки на бумаге не нужны */
+    .note-anchor.in-fragment,
+    .note-anchor.fragment-start,
+    .note-anchor.fragment-end {
+        background: none !important;
+        box-shadow: none !important;
+    }
+
+    .note-anchor.fragment-start .note-label,
+    .note-anchor.fragment-end .note-label {
+        background: none !important;
+        color: #000000 !important;
+    }
+
+    .note-anchor .duration-panel {
+        display: none !important;
+    }
+
+    /* Стрелки переключения вариантов аппликатуры на бумаге не нужны */
+    .fingering-controls {
+        display: none !important;
+    }
+}

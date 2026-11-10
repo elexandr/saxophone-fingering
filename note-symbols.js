@@ -116,13 +116,31 @@
             'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + inner + '</svg>';
     }
 
-    // Глиф ноты. options: { duration, dotted, stemUp, accidental }
+    // Черта через штиль форшлага. Координаты - как у самой ноты:
+    // штиль вверх идёт по x=+8 от 0 до -44, вниз - по x=-8 от 0 до +44,
+    // черта пересекает его посередине
+    function graceSlashMarkup(stemUp) {
+        // Посередине штиля и с запасом от флажка, иначе черта торчит
+        // из знака и читается как лишняя палочка
+        var x1 = stemUp ? 2 : -14;
+        var y1 = stemUp ? -22 : 10;
+        var x2 = stemUp ? 14 : -2;
+        var y2 = stemUp ? -10 : 22;
+        return '<line class="glyph-grace-slash" x1="' + x1 + '" y1="' + y1 +
+            '" x2="' + x2 + '" y2="' + y2 +
+            '" stroke="#111111" stroke-width="1.6" stroke-linecap="round"/>';
+    }
+
+    // Глиф ноты. options: { duration, dotted, stemUp, accidental, grace, graceSlash }
     function noteSvg(options) {
         options = options || {};
         var duration = durationInfo(options.duration).value;
         var stemUp = options.stemUp !== false;
-        var parts = [haloMarkup(), hitMarkup(), accidentalMarkup(options.accidental),
-            headMarkup(isHollow(duration))];
+        var grace = !!options.grace;
+
+        // Подсветка и зона клика - в полном размере, сам знак у форшлага мельче
+        var decoration = haloMarkup() + hitMarkup();
+        var parts = [accidentalMarkup(options.accidental), headMarkup(isHollow(duration))];
 
         if (duration !== 1) {
             parts.push(stemMarkup(stemUp));
@@ -135,7 +153,18 @@
         if (dots > 0) {
             parts.push(dotMarkup(dots));
         }
-        return wrap(parts.join(''));
+
+        var body = parts.join('');
+
+        if (grace) {
+            // Масштаб вокруг головки: она остаётся на своей линейке.
+            // Черту рисуем только у перечёркнутого форшлага: обычная
+            // appoggiatura в нотах идёт без черты
+            body = '<g transform="scale(0.62)">' + body +
+                (options.graceSlash ? graceSlashMarkup(stemUp) : '') + '</g>';
+        }
+
+        return wrap(decoration + body);
     }
 
     function restBody(duration) {
