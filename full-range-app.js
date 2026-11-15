@@ -144,6 +144,8 @@ class FullRangeStaffManager {
         this.graceSlashMode = 'file';
         // Панель свёрнута в узкую полоску с тремя кнопками
         this.sidebarCollapsed = false;
+        // Свёрнутые разделы панели: {panel.save: true, ...}
+        this.sectionsCollapsed = {};
         this.metronome = true; // по умолчанию щелчки включены
         this.metronomeVolume = 0.6;
         this.countIn = true; // отсчёт перед началом включён по умолчанию
@@ -311,6 +313,11 @@ class FullRangeStaffManager {
         // ширина стана и число строк
         this.loadSidebarCollapsed();
         this.applySidebarCollapsed(this.sidebarCollapsed, true);
+
+        // Свёрнутые разделы и клики по их заголовкам
+        this.loadSectionsCollapsed();
+        this.bindSectionToggles();
+        this.renderSectionsCollapsed();
 
         this.syncSystems(1);
         this.updateNoteCount();
@@ -808,39 +815,79 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         }
     }
 
-    // Счётчик повторов: виден во время игры по кругу, после остановки гаснет
-    updateLoopCounter(done = false) {
+    // Счётчик повторов. Плашка живёт, пока включён круг: остановка её не
+    // убирает и счёт не сбрасывает - сброс только кнопкой с крестиком-стрелкой
+    updateLoopCounter() {
         const counter = document.getElementById('loop-counter');
         if (!counter) return;
 
-        // Видимость счётчика зависит от того, идёт ли проигрывание по кругу,
-        // а не от «звучит ли нота сейчас»: в паузе между кругами и во время
-        // отсчёта плеер уже не играет, а счётчик как раз и нужен
-        if (done || !this.loopPlayback || !this.loopCounterVisible) {
+        this.updateRailRepeats();
+
+        // Без круга плашка не нужна
+        if (!this.loopPlayback) {
             counter.hidden = true;
             counter.textContent = '';
             return;
         }
 
         const total = this.loopRepeats || 20;
-        const current = Math.min(total, (this.loopCount || 0) + 1);
-        const left = Math.max(0, total - (this.loopCount || 0));
+        const done = Math.min(total, this.loopCount || 0);
 
         counter.hidden = false;
         counter.innerHTML = '';
 
-        // Крупно - какой повтор идёт (или пойдёт сразу после паузы),
-        // мелко - сколько кругов ещё осталось
+        // Только числа: сколько сыграно из заданного
         const main = document.createElement('span');
         main.className = 'loop-counter-main';
-        main.textContent = t('status.loopRepeat', { n: current, total: total });
+        main.textContent = done + ' / ' + total;
+        counter.removeAttribute('title');
 
-        const rest = document.createElement('span');
-        rest.className = 'loop-counter-left';
-        rest.textContent = t('status.loopLeft', { n: Math.max(0, left - 1) });
+        // Сброс счётчика: не мешает игре, просто начинает счёт заново
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.id = 'btn-loop-reset';
+        reset.className = 'loop-counter-reset';
+        reset.title = t('btn.loopReset.hint');
+        reset.setAttribute('aria-label', t('btn.loopReset.hint'));
+        // Символ шрифта системы: кнопка нужна и без интернета
+        reset.textContent = '\u21BB';
+        reset.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this.resetLoopCounter();
+        });
 
         counter.appendChild(main);
-        counter.appendChild(rest);
+        counter.appendChild(reset);
+    }
+
+    // Сброс счётчика повторов: игра продолжается, счёт начинается с нуля
+    resetLoopCounter() {
+        this.loopCount = 0;
+        // Идёт игра - показываем следующий повтор, стоим - «сыграно 0»
+        this.loopCounterVisible = !!(this.melodyPlayer && this.melodyPlayer.playing);
+        this.updateLoopCounter();
+        this.updateStatus(t('status.loopReset'));
+        return 0;
+    }
+
+    // Счётчик в свёрнутой полоске: сыграно / всего и кнопка сброса
+    updateRailRepeats() {
+        const rail = document.getElementById('rail-repeats');
+        const reset = document.getElementById('btn-rail-loop-reset');
+        if (!rail) return;
+
+        if (!this.loopPlayback) {
+            rail.hidden = true;
+            rail.textContent = '';
+            if (reset) reset.hidden = true;
+            return;
+        }
+
+        const total = this.loopRepeats || 20;
+        const done = Math.min(total, this.loopCount || 0);
+        rail.hidden = false;
+        rail.textContent = done + '/' + total;
+        if (reset) reset.hidden = false;
     }
     
     // === Строки стана ===
@@ -2929,6 +2976,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Новый файл - счётчик «все вверх/вниз» начинается заново
         this.allTransposeShift = 0;
 
+        // Круги тоже считаем заново: мелодии прежней больше нет
+        this.loopCount = 0;
+        this.loopCounterVisible = false;
+        this.updateLoopCounter();
+
         // Сопровождение прежнего файла играть не должно: ни нот, ни настроек,
         // ни сдвига. Без этого после «Очистить всё» фоном звучал старый файл
         this.accompaniment = [];
@@ -4491,6 +4543,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     // Восстановление мелодии из сохранённых данных. Понимает и новый формат (elements),
     // и старый (notes) - чтобы ранее сохранённые мелодии не потерялись.
     applyMelody(data) {
+        // Новая мелодия - новые круги: счёт прежней пьесы не переносим
+        this.loopCount = 0;
+        this.loopCounterVisible = false;
+        this.updateLoopCounter();
+
         // Новая мелодия - новое сопровождение: аудио-файл прежней пьесы
         // к ней не подходит и только мешал бы
         if (this.audioTrackBuffer) this.applyAudioTrack(null, '');
@@ -5182,6 +5239,88 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.audioEndMs = this.clampAudioShift(read('saxophone-audio-end', 0));
         this.audioRate = Math.max(0.5, Math.min(1.5, read('saxophone-audio-rate', 1)));
         return this.audioSettings();
+    }
+
+    // === Разделы панели ===
+    // Каждый раздел сворачивается по клику на заголовок; два значка вверху
+    // разворачивают или сворачивают все сразу. Свёрнутые помнятся в браузере
+
+    sectionIdOf(section) {
+        const label = section.querySelector('h3 span[data-i18n]');
+        return label ? label.getAttribute('data-i18n') : '';
+    }
+
+    loadSectionsCollapsed() {
+        this.sectionsCollapsed = {};
+        try {
+            const raw = localStorage.getItem(STORAGE_PREFIX + 'saxophone-sidebar-sections');
+            const saved = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(saved)) {
+                saved.forEach(id => { if (id) this.sectionsCollapsed[id] = true; });
+            }
+        } catch (error) {
+            this.sectionsCollapsed = {};
+        }
+        return this.sectionsCollapsed;
+    }
+
+    saveSectionsCollapsed() {
+        try {
+            localStorage.setItem(STORAGE_PREFIX + 'saxophone-sidebar-sections',
+                JSON.stringify(Object.keys(this.sectionsCollapsed).filter(id => this.sectionsCollapsed[id])));
+        } catch (error) {
+            // Приватный режим: просто не запоминаем
+        }
+    }
+
+    // Показать раздел свёрнутым или развёрнутым
+    applySectionCollapsed(section, collapsed) {
+        if (!section) return;
+        section.classList.toggle('section-collapsed', !!collapsed);
+    }
+
+    // Привести все разделы к состоянию из this.sectionsCollapsed
+    renderSectionsCollapsed() {
+        document.querySelectorAll('.control-panel .control-section').forEach(section => {
+            const id = this.sectionIdOf(section);
+            this.applySectionCollapsed(section, !!this.sectionsCollapsed[id]);
+        });
+    }
+
+    toggleSection(section) {
+        const id = this.sectionIdOf(section);
+        if (!id) return;
+        const collapsed = !this.sectionsCollapsed[id];
+        if (collapsed) this.sectionsCollapsed[id] = true;
+        else delete this.sectionsCollapsed[id];
+        this.applySectionCollapsed(section, collapsed);
+        this.saveSectionsCollapsed();
+    }
+
+    // Развернуть или свернуть все разделы сразу
+    setAllSectionsCollapsed(collapsed) {
+        this.sectionsCollapsed = {};
+        document.querySelectorAll('.control-panel .control-section').forEach(section => {
+            const id = this.sectionIdOf(section);
+            if (collapsed && id) this.sectionsCollapsed[id] = true;
+            this.applySectionCollapsed(section, collapsed);
+        });
+        this.saveSectionsCollapsed();
+        return collapsed;
+    }
+
+    // Клик по заголовку раздела сворачивает его
+    bindSectionToggles() {
+        document.querySelectorAll('.control-panel .control-section').forEach(section => {
+            const header = section.querySelector('h3');
+            if (!header || header.dataset.sectionBound) return;
+            header.dataset.sectionBound = '1';
+            header.addEventListener('click', (event) => {
+                // Ссылки и кнопки внутри заголовка не должны его переключать
+                if (event.target.closest('a, button')) return;
+                this.toggleSection(section);
+            });
+        });
     }
 
     // === Свёрнутая панель ===
@@ -6844,6 +6983,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-rail-play').addEventListener('click', playMelody);
     document.getElementById('btn-rail-stop').addEventListener('click', stopMelody);
 
+    // Развернуть или свернуть все разделы панели
+    document.getElementById('btn-sections-expand').addEventListener('click', () => {
+        staffManager.setAllSectionsCollapsed(false);
+    });
+    document.getElementById('btn-sections-collapse').addEventListener('click', () => {
+        staffManager.setAllSectionsCollapsed(true);
+    });
+
+    // Сброс счётчика повторов из свёрнутой полоски
+    document.getElementById('btn-rail-loop-reset').addEventListener('click', () => {
+        staffManager.resetLoopCounter();
+    });
+
     // Аудио-аккомпанемент: выбираем музыкальный файл и играем его с мелодией
     const audioButton = document.getElementById('btn-audio-accompaniment');
     const audioInput = document.getElementById('audio-input');
@@ -7095,7 +7247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     staffManager.highlightElement(null);
                     setPlayingState(false);
                     staffManager.loopCounterVisible = false;
-                    staffManager.updateLoopCounter(true);
+                    staffManager.updateLoopCounter();
                     // Если круги кончились по счёту - так и скажем
                     if (staffManager.loopPlayback && staffManager.loopCount >= repeats) {
                         staffManager.updateStatus(t('status.loopDone', { n: staffManager.loopCount }));
@@ -7144,8 +7296,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Новое проигрывание - счёт кругов с нуля
-        staffManager.loopCount = 0;
+        // Счёт кругов не сбрасываем: пауза (кнопка или пробел) и повторный
+        // запуск продолжают счёт. С нуля - только если круги уже кончились
+        // или мелодию сменили: иначе новый запуск сразу считался бы готовым
+        if ((staffManager.loopCount || 0) >= (staffManager.loopRepeats || 20)) {
+            staffManager.loopCount = 0;
+        }
+        staffManager.updateLoopCounter();
 
         // Включён отсчёт - сначала такт с цифрами, потом игра. Кнопки сразу
         // переводим в «играем»: иначе второе нажатие запускало второй отсчёт,
@@ -7343,8 +7500,10 @@ document.addEventListener('DOMContentLoaded', () => {
         staffManager.melodyPlayer.stop();
         staffManager.highlightElement(null);
         setPlayingState(false);
+        // Счётчик повторов не гасим и не обнуляем: плашка остаётся при
+        // включённом круге, сброс - кнопкой на самой плашке
         staffManager.loopCounterVisible = false;
-        staffManager.updateLoopCounter(true);
+        staffManager.updateLoopCounter();
         staffManager.updateStatus(t('status.playStopped'));
     }
     
