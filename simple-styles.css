@@ -217,13 +217,13 @@ body {
 }
 
 .rail-btn {
-    width: 34px;
-    height: 34px;
+    width: 42px;
+    height: 42px;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 16px;
     color: #2d3748;
     background: #ffffff;
     border: 1px solid #cbd5e0;
@@ -253,25 +253,35 @@ body {
 /* Символы кнопок рисуем шрифтом системы: полоска не зависит от
    внешних иконок и работает без интернета */
 .rail-glyph {
-    font-size: 15px;
+    font-size: 17px;
     line-height: 1;
 }
 
 .rail-play .rail-glyph {
-    font-size: 13px;
+    font-size: 15px;
 }
 
 .rail-stop .rail-glyph {
-    font-size: 12px;
+    font-size: 14px;
 }
 
 .sidebar-rail {
     margin-top: 2px;
 }
 
+/* Темп в полоске: только цифра, без поля ввода */
+.rail-tempo {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2d3748;
+    white-space: nowrap;
+    user-select: none;
+    cursor: default;
+}
+
 /* Повторы в полоске: сыграно / всего */
 .rail-repeats {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: #4a5568;
     white-space: nowrap;
@@ -317,8 +327,9 @@ body {
 /* Свёрнутое состояние: панель сужается до полоски */
 body.sidebar-collapsed .control-panel {
     box-sizing: border-box;
-    width: 46px;
-    padding: 8px 4px;
+    /* Ширина с запасом под кнопки 42px: 56 - 2*6 отступа = 44 */
+    width: 56px;
+    padding: 8px 6px;
     overflow: hidden;
 }
 
@@ -576,6 +587,17 @@ body.sidebar-collapsed .sidebar-rail {
 }
 
 /* Кнопки */
+/* Пары в «Управлении нотами»: внутри пары тесно, между парами
+   отступ больше - так кнопки читаются группами */
+.control-group.notes-pair {
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.control-group.notes-pair:last-child {
+    margin-bottom: 0;
+}
+
 .control-group {
     display: flex;
     flex-direction: column;

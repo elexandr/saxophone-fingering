@@ -37,7 +37,12 @@
     // Если известенf точное время из файла (поле beats), оно главнее: <type>
     // бывает приблизительным, а <duration> - это настоящее время ноты
     function beatsOf(element) {
-        if (element && typeof element.beats === 'number' && element.beats > 0) return element.beats;
+        // Форшлаг времени не занимает: без этого он съедал долю при разбиении
+        // на такты, и сохранённый файл получался с тактами по 3 доли вместо 4.
+        // При открытии такого файла ноты «уезжали» относительно тактовых черт
+        if (!element) return 0;
+        if (element.isGrace) return 0;
+        if (typeof element.beats === 'number' && element.beats > 0) return element.beats;
 
         var denominator = Number(element.duration) || 4;
         var beats = 4 / denominator;
@@ -346,6 +351,9 @@
         field('sax-fingering-app-shift', settings.appSoundShift);
         field('sax-fingering-instrument-shift', settings.saxShift);
         field('sax-fingering-sounding-names', settings.soundingNames ? 'true' : 'false');
+        field('sax-fingering-accompaniment-shift', settings.accompanimentShift);
+        field('sax-fingering-accompaniment-linked',
+            settings.accompanimentShiftLinked === false ? 'false' : 'true');
         field('sax-fingering-set', meta.fingeringSet || '');
 
         var out = [
@@ -792,6 +800,8 @@
             if (name === 'sax-fingering-app-shift') settings.appSoundShift = Number(value);
             else if (name === 'sax-fingering-instrument-shift') settings.saxShift = Number(value);
             else if (name === 'sax-fingering-sounding-names') settings.soundingNames = value === 'true';
+            else if (name === 'sax-fingering-accompaniment-shift') settings.accompanimentShift = Number(value);
+            else if (name === 'sax-fingering-accompaniment-linked') settings.accompanimentShiftLinked = value === 'true';
             else if (name === 'sax-fingering-set') meta.fingeringSet = value;
             else if (name === 'sax-fingering-model') meta.model = Number(value);
             else if (name === 'sax-fingering-version') meta.version = value;
@@ -1027,6 +1037,10 @@
             timeSignature: (beats && beatType) ? (beats + '/' + beatType) : '',
             fifths: fifthsMatch ? Number(fifthsMatch[1]) : null,
             partCount: parts.length,
+            // Транспозиция выбранной партии: сколько она звучит относительно
+            // написанного (у альта -9). Нужна, чтобы сопровождение встало
+            // на своё место: аккомпанемент концертный, мелодия - как написана
+            transpose: Number(walked.transpose) || 0,
             partNames: parts.map(function (part) { return partNames[part.id] || part.id; }),
             chosenPart: partNames[chosenPart.id] || chosenPart.id,
             clefSign: clefSign,

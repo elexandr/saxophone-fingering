@@ -104,6 +104,13 @@ class FullRangeStaffManager {
         this.loadAudioSettings();
         this.accompanimentVolume = 1;    // общая громкость сопровождения
         this.accompanimentShift = 0;     // сдвиг только сопровождения, полутонов
+        // Сопровождение по умолчанию идёт за звуком инструмента: открыли
+        // файл с альтом - тот же сдвиг получает и сопровождение. Своё
+        // значение в поле отключает связь
+        this.accompanimentShiftLinked = true;
+        // Транспозиция партии в открытом файле: 0 - написано как звучит,
+        // -9 - партия альта, -14 - тенора. От неё зависит сдвиг сопровождения
+        this.fileTranspose = 0;
         this.allTransposeShift = 0;      // на сколько сдвинули все ноты кнопками «Все вверх/вниз»
         this.selectedIds = [];
         this.selectionAnchorId = null;
@@ -443,6 +450,12 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         I18n.setLang(lang, persist);
         this.refreshTexts();
         this.updateLanguageButtons();
+
+        // Пример «что играет приложение и что звучит у инструмента» строится
+        // кодом: без этого он оставался на прежнем языке после переключения
+        if (typeof this.updateInstrumentExample === 'function') {
+            this.updateInstrumentExample();
+        }
     }
     
     // Перевыводит всё, что формируется кодом: подписи знаков, окошки, строки
@@ -871,6 +884,18 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
     }
 
     // Счётчик в свёрнутой полоске: сыграно / всего и кнопка сброса
+    // Текущий темп в свёрнутой полоске: только показать. Менять темп -
+    // в разделе «Воспроизведение», здесь для этого нет поля
+    updateRailTempo() {
+        const rail = document.getElementById('rail-tempo');
+        if (!rail) return;
+
+        const tempo = Math.min(240, Math.max(30, parseInt(this.tempo, 10) || 80));
+        rail.textContent = String(tempo);
+        rail.setAttribute('title', t('rail.tempo.hint'));
+        return tempo;
+    }
+
     updateRailRepeats() {
         const rail = document.getElementById('rail-repeats');
         const reset = document.getElementById('btn-rail-loop-reset');
@@ -2976,6 +3001,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Новый файл - счётчик «все вверх/вниз» начинается заново
         this.allTransposeShift = 0;
 
+        // Транспозиция относилась к прежней партии: у новой будет своя
+        this.fileTranspose = 0;
+
         // Круги тоже считаем заново: мелодии прежней больше нет
         this.loopCount = 0;
         this.loopCounterVisible = false;
@@ -4515,6 +4543,11 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             mainVolume: this.mainVolume,
             accompanimentVolume: this.accompanimentVolume,
             accompanimentShift: this.accompanimentShift,
+            accompanimentShiftLinked: this.accompanimentShiftLinked,
+            // «Все вверх/вниз»: мелодия уже записана сдвинутой, а
+            // сопровождение играется с этим сдвигом. Без сохранения
+            // после открытия файла мелодия и сопровождение расходились
+            allTransposeShift: this.allTransposeShift || 0,
             timestamp: new Date().toISOString(),
             version: '1.5.0',
             range: 'C2 - F#6'
@@ -4803,6 +4836,12 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.accompaniment = accompaniment;
         this.renderAccompanimentPanel();
 
+        // Инструмент выбран заранее (альт, тенор): сопровождение из MIDI
+        // звучит вместе с мелодией и получает тот же сдвиг. Связь при этом
+        // включаем заново: прежний ручной 0 к новой пьесе не относится
+        this.accompanimentShiftLinked = true;
+        this.syncAccompanimentShift();
+
         this.applyMidiSettings(converted);
         this.updateStatus(this.midiStatusText(converted));
         
@@ -4908,6 +4947,12 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         if (settings && settings.soundingNames === undefined && settings.fingeringLinked !== undefined) {
             this.soundingNames = !settings.fingeringLinked;
         }
+
+        // Сопровождение идёт за сдвигом инструмента, если связь не снята
+        if (typeof this.syncAccompanimentShift === 'function') {
+            this.syncAccompanimentShift();
+        }
+
         if (!settings) return;
         
         if (settings.imageSize) {
@@ -5107,6 +5152,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         this.syncPresetHighlight();
         this.updateInstrumentExample();
 
+        // Сопровождение едет вместе с инструментом, если связь не снята
+        this.syncAccompanimentShift();
+
         this.updateStatus(t('status.shifts', {
             app: this.appSoundShift,
             sax: this.saxShift
@@ -5141,6 +5189,44 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             this.melodyPlayer.setAccompanimentTranspose(
                 this.accompanimentShift + this.allTransposeShift);
         }
+    }
+
+    // Связанный сдвиг: пока связь включена, сопровождение повторяет сдвиг
+    // инструмента. Раньше при открытии файла с альтом мелодия уезжала на
+    // -9, а сопровождение оставалось на 0 - и приходилось править вручную
+    // Куда должно встать сопровождение: мелодия звучит как написанное плюс
+    // сдвиг инструмента, а партия в файле, возможно, уже транспонирована.
+    // Аккомпанемент концертный, поэтому его сдвиг = инструмент минус
+    // транспозиция партии: нет сдвига в файле - всё едет за инструментом,
+    // партия альта при альте - 0, партия тенора при альте - +5
+    accompanimentShiftTarget() {
+        const instrument = Number(this.appSoundShift) || 0;
+        const partTranspose = Number(this.fileTranspose) || 0;
+        return this.clampShift(instrument - partTranspose);
+    }
+
+    syncAccompanimentShift() {
+        if (!this.accompanimentShiftLinked) return this.accompanimentShift;
+
+        this.accompanimentShift = this.accompanimentShiftTarget();
+        const field = document.getElementById('accompaniment-shift');
+        if (field) field.value = String(this.accompanimentShift);
+        this.applyAccompanimentShift();
+        return this.accompanimentShift;
+    }
+
+    // Ручная правка поля: своё значение отключает связь, совпадение с
+    // инструментом - снова включает
+    setAccompanimentShift(value) {
+        const shift = this.clampShift(Number(value) || 0);
+        this.accompanimentShift = shift;
+        this.accompanimentShiftLinked = shift === this.accompanimentShiftTarget();
+
+        const field = document.getElementById('accompaniment-shift');
+        if (field) field.value = String(shift);
+        this.applyAccompanimentShift();
+
+        return shift;
     }
 
     renderAccompanimentPanel() {
@@ -5352,6 +5438,7 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         document.body.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
 
         this.syncRailButtons();
+        this.updateRailTempo();
 
         if (!silent) {
             this.saveSidebarCollapsed();
@@ -5371,7 +5458,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const playing = !!(this.melodyPlayer && this.melodyPlayer.playing);
         const play = document.getElementById('btn-rail-play');
         const stop = document.getElementById('btn-rail-stop');
-        if (play) play.disabled = playing;
+        // «Играть» доступна всегда: повторное нажатие начинает сначала
+        if (play) play.disabled = false;
         if (stop) stop.disabled = !playing;
     }
 
@@ -5665,10 +5753,8 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         // Сдвиг только сопровождения: общий сдвиг двигает и его тоже
         const accShiftInput = document.getElementById('accompaniment-shift');
         const applyAccShift = (value) => {
-            const shift = staffManager.clampShift(Number(value) || 0);
-            staffManager.accompanimentShift = shift;
-            if (accShiftInput) accShiftInput.value = String(shift);
-            staffManager.applyAccompanimentShift();
+            staffManager.setAccompanimentShift(value);
+            staffManager.scheduleAutosave();
         };
         // Единичные обработчики вместо addEventListener: при повторной
         // инициализации их накапливалось несколько, и шаг выходил в три пункта
@@ -5752,6 +5838,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
         const input = document.getElementById('tempo-input');
         if (input && parseInt(input.value, 10) !== tempo) input.value = tempo;
 
+        // В свёрнутой полоске видно текущий темп
+        this.updateRailTempo();
+
         // При загруженной записи стан подгоняется под её длину: в другой темп
         // влезает другое число тактов, и сетка пересчитывается
         if (changed && this.hasAudioTrack() && !this.buildingGrid) {
@@ -5831,6 +5920,10 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 ? data.accompanimentVolume : 1;
             this.accompanimentShift = typeof data.accompanimentShift === 'number'
                 ? data.accompanimentShift : 0;
+            this.accompanimentShiftLinked = data.accompanimentShiftLinked !== false;
+            // Сдвиг «все вверх/вниз» прежней сессии: мелодия сохранена уже
+            // транспонированной, и сопровождению нужен тот же сдвиг
+            this.allTransposeShift = Number(data.allTransposeShift) || 0;
             const mainVolumeField = document.getElementById('main-volume');
             if (mainVolumeField) mainVolumeField.value = String(Math.round(this.mainVolume * 100));
             const accShiftField = document.getElementById('accompaniment-shift');
@@ -6198,7 +6291,12 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
                 appSoundShift: this.appSoundShift,
                 saxShift: this.saxShift,
                 soundingNames: this.soundingNames,
-                keyFifths: this.keyFifths
+                keyFifths: this.keyFifths,
+                // Партии сопровождения пишутся уже в звучащей высоте: сдвиг
+                // вложен в сами ноты, поэтому в настройках остаётся 0.
+                // Иначе при открытии файла сдвиг применился бы второй раз
+                accompanimentShift: 0,
+                accompanimentShiftLinked: false
             },
             meta: {
                 model: 1,
@@ -6709,6 +6807,9 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
 
         this.loading = false;
 
+        // Транспозиция выбранной партии: нужна для сдвига сопровождения
+        this.fileTranspose = Number(parsed.transpose) || 0;
+
         // Сдвиги и режим подписей из расширений: без них файл откроется не так
         const settings = parsed.settings || {};
         if (typeof settings.appSoundShift === 'number') this.appSoundShift = settings.appSoundShift;
@@ -6718,6 +6819,18 @@ document.getElementById('count-in-on').addEventListener('change', (e) => {
             const toggle = document.getElementById('sounding-names-toggle');
             if (toggle) toggle.checked = this.soundingNames;
         }
+        // Новый файл: связь сопровождения с инструментом включаем заново.
+        // Иначе после любого ручного 0 следующая пьеса открывалась бы с
+        // нулём, хотя инструмент выбран (альт -9 и т.п.)
+        this.accompanimentShiftLinked = true;
+
+        // Сдвиг сопровождения: явное значение из файла важнее. Свои файлы
+        // несут 0 и снятую связь - в них сопровождение уже в звучащей высоте
+        if (settings && typeof settings.accompanimentShift === 'number') {
+            this.setAccompanimentShift(settings.accompanimentShift);
+            if (settings.accompanimentShiftLinked === false) this.accompanimentShiftLinked = false;
+        }
+
         if (this.afterShiftChange) this.afterShiftChange();
 
         if (parsed.tempo) this.setTempo(parsed.tempo);
@@ -7117,7 +7230,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     function setPlayingState(playing) {
-        document.getElementById('btn-play').disabled = playing;
+        // «Играть» не блокируем: повторное нажатие начинает мелодию сначала
+        document.getElementById('btn-play').disabled = false;
         document.getElementById('btn-stop').disabled = !playing;
         // Те же кнопки в свёрнутой панели
         staffManager.syncRailButtons();
@@ -7132,9 +7246,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Отсчёт уже идёт - второй запуск не нужен: два таймера начнут игру
-        // дважды, и мелодия будет зацикливаться на первой ноте
-        if (staffManager.countInRunning) return;
+        // Уже играем или идёт отсчёт - нажатие «Играть» начинает сначала:
+        // останавливаем текущее проигрывание и запускаем заново. Иначе
+        // второй вызов заводил второй отсчёт и мелодия зацикливалась
+        if ((staffManager.melodyPlayer && staffManager.melodyPlayer.playing) ||
+            staffManager.countInRunning) {
+            stopMelody();
+        }
 
         // Порядок воспроизведения учитывает репризу: участок играется дважды
         const fullSequence = Playback.buildSequence(staffManager.notes);
