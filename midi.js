@@ -107,6 +107,21 @@
 
     // --- разбор файла ------------------------------------------------------
 
+    // Транспозиция инструмента по номеру программы General MIDI
+    // (номера здесь с нуля: 64 - сопрано, 65 - альт, 66 - тенор, 67 - баритон).
+    // Сдвиг - на сколько инструмент звучит ниже написанного
+    var INSTRUMENT_SHIFTS = {
+        64: -2,
+        65: -9,
+        66: -14,
+        67: -21
+    };
+
+    function instrumentShift(program) {
+        if (program === undefined || program === null) return 0;
+        return INSTRUMENT_SHIFTS[Number(program)] || 0;
+    }
+
     function parse(buffer) {
         var bytes = toBytes(buffer);
         var errors = [];
@@ -134,6 +149,7 @@
         var tracks = [];
         var tempoBpm = null;
         var timeSignature = null;
+        var keySignature = null;
         var programs = {};
         var trackName = '';
         var trackInfos = [];
@@ -159,6 +175,7 @@
 
             if (tempoBpm === null && track.tempoBpm) tempoBpm = track.tempoBpm;
             if (timeSignature === null && track.timeSignature) timeSignature = track.timeSignature;
+            if (keySignature === null && track.keySignature) keySignature = track.keySignature;
             // Инструменты каналов и название дорожки: по ним назовём инструмент
             if (track.programs) {
                 Object.keys(track.programs).forEach(function (ch) { programs[ch] = track.programs[ch]; });
@@ -196,6 +213,7 @@
             trackCount: tracks.length,
             tempoBpm: tempoBpm,
             timeSignature: timeSignature,
+            keySignature: keySignature,
             programs: programs,
             tracks: trackInfos,
             trackName: trackName,
@@ -211,6 +229,9 @@
         var tick = 0;
         var runningStatus = null;
         var tempoBpm = null;
+        // Тональность из файла: без неё стан открывался без знаков при ключе,
+        // хотя в Guitar Pro и в нотах тональность видна
+        var keySignature = null;
         var timeSignature = null;
         var programs = {};
         var trackName = '';
@@ -252,6 +273,12 @@
                             numerator: bytes[pos],
                             denominator: Math.pow(2, bytes[pos + 1])
                         };
+                    }
+                } else if (metaType === META.keySignature && metaLength.value >= 2) {
+                    // sf - число знаков (отрицательное - бемоли), mi - минор
+                    var sf = bytes[pos] > 127 ? bytes[pos] - 256 : bytes[pos];
+                    if (keySignature === null) {
+                        keySignature = { fifths: sf, minor: bytes[pos + 1] };
                     }
                 } else if (metaType === META.endOfTrack) {
                     lastTick = Math.max(lastTick, tick);
@@ -347,9 +374,8 @@
             notes: notes,
             tempoBpm: tempoBpm,
             timeSignature: timeSignature,
-            programs: programs,
-            tracks: trackInfos,
-            trackName: trackName,
+            // Тональность дорожки: нужна, чтобы стан открылся со знаками
+            keySignature: keySignature,
             programs: programs,
             tracks: trackInfos,
             trackName: trackName
@@ -532,6 +558,7 @@
     //   5. длина до следующего начала сначала набирается обычными
     //      длительностями (самая большая, что влезает), остаток - триольными;
     //   6. что не влезло в такт - переносится за черту и связывается лигой.
+    // options.beatsPerBar - размер такта, если его нужно задать вручную
     function toElements(data, options) {
         options = options || {};
         var shift = options.shift;
@@ -549,6 +576,24 @@
             if (following.startTick > current.startTick &&
                 following.startTick < current.startTick + current.durationTicks) {
                 current.durationTicks = following.startTick - current.startTick;
+            }
+        }
+
+        // Гейт чужого экспорта: Guitar Pro и подобные программы пишут ноту
+        // короче, чем она должна звучать (около 80%), поэтому между нотой и
+        // следующим началом остаётся небольшой зазор. Если считать его
+        // паузой, восьмая превращается в 16-ю с триолью и паузой. Зазор
+        // меньше 1/16 доли или меньше четверти шага до следующей ноты - это
+        // не пауза, а спад звука: длительность берём до следующего начала
+        var gateFloor = ppq / 4;
+        for (var g = 0; g + 1 < sourceNotes.length; g++) {
+            var gateNote = sourceNotes[g];
+            var gateNext = sourceNotes[g + 1];
+            var gatePlace = gateNext.startTick - gateNote.startTick;
+            var gateGap = gatePlace - gateNote.durationTicks;
+            if (gatePlace <= 0 || gateGap <= 0) continue;
+            if (gateGap < gateFloor || gateGap <= gatePlace * 0.25) {
+                gateNote.durationTicks = gatePlace;
             }
         }
 
@@ -573,9 +618,19 @@
         }
 
         // 3. Сетка нотной записи
+        // Шагов на четверть: 12 (то есть 1/48 доли)
         var STEPS = 12;
         var stepTicks = ppq / STEPS;
-        var measureSteps = 4 * STEPS;
+
+        // Длина такта - по размеру файла. Раньше такт всегда считался
+        // четырёхдольным: в 3/4 нота, переходящая через черту, не делилась,
+        // и такт выходил на долю длиннее - такты 2, 6, 10 уезжали
+        var beatsPerBar = options.beatsPerBar;
+        if (!beatsPerBar && data.timeSignature) {
+            beatsPerBar = data.timeSignature.numerator * 4 / data.timeSignature.denominator;
+        }
+        if (!beatsPerBar || beatsPerBar <= 0) beatsPerBar = 4;
+        var measureSteps = Math.max(1, Math.round(beatsPerBar * STEPS));
 
         var NOTATION = [];
         [[1, 0], [2, 1], [4, 2], [8, 3], [16, 4], [32, 5]].forEach(function (pair) {
@@ -983,6 +1038,7 @@
         analyzePolyphony: analyzePolyphony,
         midiToName: midiToName,
         instrumentName: instrumentName,
+        instrumentShift: instrumentShift,
         bestOctaveShift: bestOctaveShift,
         fitReport: fitReport,
         RANGE_MIN_MIDI: RANGE_MIN_MIDI,
